@@ -28,7 +28,7 @@ export class ExamItemsStack extends cdk.Stack {
       sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      pointInTimeRecovery: false,
+      pointInTimeRecovery: false, // PITR disabled — cost optimization for dev/challenge; enable for production
     });
 
     // Separate GSIs for subject and status allow efficient filtered list queries
@@ -64,8 +64,8 @@ export class ExamItemsStack extends cdk.Stack {
         environment: {
           USE_DYNAMODB: 'true',
           DYNAMODB_TABLE_NAME: table.tableName,
-          // AWS_REGION is reserved by the Lambda runtime; use a custom name instead
-          AWS_REGION_NAME: this.region,
+          // AWS_REGION is injected automatically by the Lambda runtime — no need to set it manually.
+          // DynamoDBStorage reads process.env.AWS_REGION which the runtime provides.
         },
         bundling: {
           minify: false,
@@ -136,13 +136,11 @@ export class ExamItemsStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: api.url,
       description: 'API Gateway base URL',
-      exportName: 'ExamItemsApiUrl',
     });
 
     new cdk.CfnOutput(this, 'TableName', {
       value: table.tableName,
       description: 'DynamoDB table name',
-      exportName: 'ExamItemsTableName',
     });
 
     const lambdas: Record<string, lambda.Function> = {
