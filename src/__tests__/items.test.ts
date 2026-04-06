@@ -100,3 +100,44 @@ describe('getItemHandler', () => {
     expect(body.error).toBe('Item not found');
   });
 });
+
+describe('updateItemHandler', () => {
+  it('returns 200 with updated fields', async () => {
+    const created = await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    const { id } = JSON.parse(created.body);
+
+    const result = await updateItemHandler(makeEvent({
+      httpMethod: 'PUT',
+      pathParameters: { id },
+      body: { subject: 'AP Chemistry', difficulty: 4 },
+    }));
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(200);
+    expect(body.subject).toBe('AP Chemistry');
+    expect(body.difficulty).toBe(4);
+    expect(body.metadata.version).toBe(2);
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const result = await updateItemHandler(makeEvent({
+      httpMethod: 'PUT',
+      pathParameters: { id: 'does-not-exist' },
+      body: { subject: 'AP Chemistry' },
+    }));
+    expect(result.statusCode).toBe(404);
+  });
+
+  it('returns 400 when difficulty is invalid', async () => {
+    const created = await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    const { id } = JSON.parse(created.body);
+
+    const result = await updateItemHandler(makeEvent({
+      httpMethod: 'PUT',
+      pathParameters: { id },
+      body: { difficulty: 99 },
+    }));
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(400);
+    expect(body.error).toBe('Validation failed');
+  });
+});
