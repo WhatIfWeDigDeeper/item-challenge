@@ -5,17 +5,17 @@ export async function getItemHandler(event: APIGatewayProxyEvent): Promise<APIGa
   try {
     const id = event.pathParameters?.id;
     if (!id) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Missing item id' }) };
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Missing item id' }) };
     }
 
     const item = await createStorage().getItem(id);
     if (!item) {
-      return { statusCode: 404, body: JSON.stringify({ error: 'Item not found' }) };
+      return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Item not found' }) };
     }
 
-    return { statusCode: 200, body: JSON.stringify(item) };
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) };
   } catch (error) {
     console.error('Error getting item:', error);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Internal server error' }) };
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Internal server error' }) };
   }
 }

@@ -5,19 +5,19 @@ export async function getAuditHandler(event: APIGatewayProxyEvent): Promise<APIG
   try {
     const id = event.pathParameters?.id;
     if (!id) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Missing item id' }) };
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Missing item id' }) };
     }
 
     const storage = createStorage();
     const item = await storage.getItem(id);
     if (!item) {
-      return { statusCode: 404, body: JSON.stringify({ error: 'Item not found' }) };
+      return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Item not found' }) };
     }
 
     const versions = await storage.getAuditTrail(id);
-    return { statusCode: 200, body: JSON.stringify({ itemId: id, versions }) };
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: id, versions }) };
   } catch (error) {
     console.error('Error getting audit trail:', error);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Internal server error' }) };
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Internal server error' }) };
   }
 }

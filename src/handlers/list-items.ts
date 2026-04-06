@@ -9,6 +9,7 @@ export async function listItemsHandler(event: APIGatewayProxyEvent): Promise<API
     if (!result.success) {
       return {
         statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ error: 'Validation failed', details: result.error.flatten() }),
       };
     }
@@ -18,10 +19,11 @@ export async function listItemsHandler(event: APIGatewayProxyEvent): Promise<API
 
     return {
       statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items, total, limit, offset }),
     };
   } catch (error) {
     console.error('Error listing items:', error);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Internal server error' }) };
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Internal server error' }) };
   }
 }
