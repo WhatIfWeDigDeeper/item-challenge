@@ -132,14 +132,34 @@ export class DynamoDBStorage implements ItemStorage {
   }
 
   async createVersion(id: string): Promise<ExamItem | null> {
-    // TODO: Implement versioning strategy
-    // Options: Separate versions table, same table with sort key, etc.
-    throw new Error('Not implemented - define your versioning strategy');
+    const current = await this.getItem(id);
+    if (!current) return null;
+
+    // Count existing version records to determine next version number
+    const countResult = await this.client.send(new QueryCommand({
+      TableName: this.tableName,
+      KeyConditionExpression: 'id = :id AND begins_with(sk, :prefix)',
+      ExpressionAttributeValues: { ':id': id, ':prefix': 'VERSION#' },
+      Select: 'COUNT',
+    }));
+    const nextVersion = (countResult.Count ?? 0) + 1;
+    const versionSk = `VERSION#${String(nextVersion).padStart(4, '0')}`;
+
+    await this.client.send(new PutCommand({
+      TableName: this.tableName,
+      Item: { ...current, sk: versionSk },
+    }));
+
+    return current;
   }
 
   async getAuditTrail(id: string): Promise<ExamItem[]> {
-    // TODO: Implement audit trail retrieval
-    // This depends on your versioning strategy
-    throw new Error('Not implemented - define your audit trail strategy');
+    const result = await this.client.send(new QueryCommand({
+      TableName: this.tableName,
+      KeyConditionExpression: 'id = :id AND begins_with(sk, :prefix)',
+      ExpressionAttributeValues: { ':id': id, ':prefix': 'VERSION#' },
+    }));
+
+    return (result.Items || []).map(({ sk: _sk, ...item }) => item as ExamItem);
   }
 }

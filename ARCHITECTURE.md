@@ -12,7 +12,7 @@
 
 | Record type      | PK       | SK             |
 |------------------|----------|----------------|
-| Current item     | `<uuid>` | `#CURRENT`     |
+| Current item     | `<uuid>` | `ITEM`         |
 | Version snapshot | `<uuid>` | `VERSION#0001` |
 
 Zero-padded version numbers in the SK (`VERSION#0001`, `VERSION#0002`, …) ensure lexicographic sort matches version order.
@@ -21,11 +21,11 @@ Zero-padded version numbers in the SK (`VERSION#0001`, `VERSION#0002`, …) ensu
 
 | Operation       | DynamoDB operation |
 |-----------------|-------------------|
-| Create item     | `TransactWriteItems` → writes `#CURRENT` + `VERSION#0001` atomically |
-| Get item        | `GetItem(id, #CURRENT)` |
-| Update item     | `TransactWriteItems` → overwrites `#CURRENT` + writes new `VERSION#NNNN` |
-| List items      | `Query` on GSI, SK filter `= #CURRENT` |
-| Create version  | `TransactWriteItems` → overwrites `#CURRENT` + writes new `VERSION#NNNN` |
+| Create item     | `PutItem` with `sk = ITEM` |
+| Get item        | `GetItem(id, ITEM)` |
+| Update item     | `PutItem` → overwrites `ITEM` record with incremented version |
+| List items      | `Scan` with `FilterExpression sk = ITEM`; client-side offset/limit |
+| Create version  | `PutItem` → writes new `VERSION#NNNN` snapshot of current item |
 | Get audit trail | `Query(id)` with SK `begins_with VERSION#` |
 
 #### GSIs

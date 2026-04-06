@@ -103,13 +103,15 @@ describe('ExamItemsStack', () => {
     });
 
     it('read-only Lambda functions are not granted write actions', () => {
-      // CDK grantReadData emits specific read actions; grantReadWriteData emits dynamodb:*.
-      // Verify at least one policy exists that contains only read actions and NOT the
-      // write wildcard — confirming the read/write split is in effect.
+      // CDK grantReadData emits specific read actions without write actions.
+      // Verify at least one policy exists that contains GetItem but none of the
+      // write actions (PutItem, UpdateItem, DeleteItem) — confirming the read/write
+      // split is in effect and read-only roles are not accidentally over-privileged.
+      const writeActions = ['dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem', 'dynamodb:TransactWriteItems', 'dynamodb:BatchWriteItem'];
       const policies = template.findResources('AWS::IAM::Policy', {});
       const policyDocs = Object.values(policies).map((p: any) => JSON.stringify(p.Properties.PolicyDocument));
       const readOnlyPolicies = policyDocs.filter(
-        (doc) => doc.includes('dynamodb:GetItem') && !doc.includes('dynamodb:*'),
+        (doc) => doc.includes('dynamodb:GetItem') && writeActions.every((a) => !doc.includes(a)),
       );
       expect(readOnlyPolicies.length).toBeGreaterThan(0);
     });

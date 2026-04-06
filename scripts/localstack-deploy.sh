@@ -82,10 +82,15 @@ RESPONSE=$(curl -sf -X POST "$API_URL/api/items" \
     "content": {
       "question": "What is 2+2?",
       "options": ["3", "4", "5"],
-      "correctAnswer": "4"
+      "correctAnswer": "4",
+      "explanation": "2+2 equals 4 by the definition of addition."
     },
     "securityLevel": "standard",
-    "metadata": { "status": "draft" }
+    "metadata": {
+      "status": "draft",
+      "author": "smoke-test",
+      "tags": []
+    }
   }') || {
   echo "WARNING: POST /api/items failed (this may be expected if DynamoDB storage is not fully implemented)"
   exit 0

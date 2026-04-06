@@ -69,8 +69,8 @@ export class ExamItemsStack extends cdk.Stack {
           // DynamoDBStorage reads process.env.AWS_REGION which the runtime provides.
         },
         bundling: {
-          minify: false,
-          sourceMap: true,
+          minify: true,
+          sourceMap: false,
           externalModules: [],
         },
       });
