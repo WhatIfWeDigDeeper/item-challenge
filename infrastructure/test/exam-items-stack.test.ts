@@ -58,10 +58,16 @@ describe('ExamItemsStack', () => {
     });
 
     it('all Lambda functions use Node.js 22.x runtime', () => {
-      // Check that at least one function uses nodejs22.x (template assertion checks at least one match)
+      // hasResourceProperties checks at least one match; we also verify the total count
+      // to ensure all 6 functions use the correct runtime (no stragglers using an older runtime).
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs22.x',
       });
+      // Count functions with the correct runtime — must match total Lambda count of 6
+      const functions = template.findResources('AWS::Lambda::Function', {
+        Properties: { Runtime: 'nodejs22.x' },
+      });
+      expect(Object.keys(functions).length).toBe(6);
     });
   });
 
@@ -84,7 +90,9 @@ describe('ExamItemsStack', () => {
         PolicyDocument: {
           Statement: Match.arrayWith([
             Match.objectLike({
-              Action: Match.anyValue(),
+              Action: Match.arrayWith([
+                Match.stringLike('dynamodb:*'),
+              ]),
               Effect: 'Allow',
             }),
           ]),
@@ -95,11 +103,17 @@ describe('ExamItemsStack', () => {
 
   describe('Stack Outputs', () => {
     it('outputs the API Gateway URL', () => {
-      template.hasOutput('ApiUrl', {});
+      template.hasOutput('ApiUrl', {
+        Value: Match.anyValue(),
+        Description: 'API Gateway base URL',
+      });
     });
 
     it('outputs the DynamoDB table name', () => {
-      template.hasOutput('TableName', {});
+      template.hasOutput('TableName', {
+        Value: Match.anyValue(),
+        Description: 'DynamoDB table name',
+      });
     });
   });
 });
