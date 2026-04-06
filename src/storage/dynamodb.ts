@@ -106,30 +106,40 @@ export class DynamoDBStorage implements ItemStorage {
   }
 
   async listItems(query: ListItemsQuery): Promise<{ items: ExamItem[]; total: number }> {
-    const filterParts: string[] = ['sk = :sk'];
-    const expressionAttributeValues: Record<string, unknown> = { ':sk': 'ITEM' };
-    const expressionAttributeNames: Record<string, string> = {};
+    let result;
 
     if (query.subject) {
-      filterParts.push('#subject = :subject');
-      expressionAttributeNames['#subject'] = 'subject';
-      expressionAttributeValues[':subject'] = query.subject;
+      // Query SubjectIndex — avoids full-table scan; subject is a DynamoDB reserved word so use #subject
+      const expressionAttributeValues: Record<string, unknown> = { ':subject': query.subject, ':sk': 'ITEM' };
+      const filterParts: string[] = [];
+      if (query.status) {
+        filterParts.push('itemStatus = :status');
+        expressionAttributeValues[':status'] = query.status;
+      }
+      result = await this.client.send(new QueryCommand({
+        TableName: this.tableName,
+        IndexName: 'SubjectIndex',
+        KeyConditionExpression: '#subject = :subject AND sk = :sk',
+        ExpressionAttributeNames: { '#subject': 'subject' },
+        ExpressionAttributeValues: expressionAttributeValues,
+        ...(filterParts.length > 0 && { FilterExpression: filterParts.join(' AND ') }),
+      }));
+    } else if (query.status) {
+      // Query StatusIndex — avoids full-table scan for status-only filter
+      result = await this.client.send(new QueryCommand({
+        TableName: this.tableName,
+        IndexName: 'StatusIndex',
+        KeyConditionExpression: 'itemStatus = :status AND sk = :sk',
+        ExpressionAttributeValues: { ':status': query.status, ':sk': 'ITEM' },
+      }));
+    } else {
+      // No filters — full-table scan limited to ITEM records only
+      result = await this.client.send(new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: 'sk = :sk',
+        ExpressionAttributeValues: { ':sk': 'ITEM' },
+      }));
     }
-
-    if (query.status) {
-      // metadata and status are reserved words in DynamoDB expression syntax
-      filterParts.push('#metadata.#status = :status');
-      expressionAttributeNames['#metadata'] = 'metadata';
-      expressionAttributeNames['#status'] = 'status';
-      expressionAttributeValues[':status'] = query.status;
-    }
-
-    const result = await this.client.send(new ScanCommand({
-      TableName: this.tableName,
-      FilterExpression: filterParts.join(' AND '),
-      ExpressionAttributeValues: expressionAttributeValues,
-      ...(Object.keys(expressionAttributeNames).length > 0 && { ExpressionAttributeNames: expressionAttributeNames }),
-    }));
 
     // DynamoDB Limit caps items *scanned*, not returned — paginate client-side instead
     const allItems = (result.Items || []).map(({ sk: _sk, itemStatus: _itemStatus, ...item }) => item as ExamItem);
