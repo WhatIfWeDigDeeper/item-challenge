@@ -104,7 +104,7 @@ Grant methods automatically include GSI ARNs — no manual enumeration required.
 ## Scalability
 
 - GSIs on `subject` and `itemStatus` eliminate full-table Scans for the two common list filters
-- Lambda scales horizontally without configuration
+- Lambda scales horizontally without configuration, but shards are limited to 3000 read units, which may be a bottleneck if there are many concurrent requests with heavy read patterns. In that case, we could consider adding a caching layer (e.g., DynamoDB Accelerator or ElastiCache) for hot items. See future improvements for splitting off management from distribution.
 - `offset`-based pagination used for simplicity; DynamoDB's `LastEvaluatedKey` cursor is more efficient at large page offsets and is a future improvement
 
 ---
@@ -225,8 +225,45 @@ curl -s http://localhost:3000/api/items/<id>/audit
 |----------|----------------|-------------|--------|
 | Versioning storage | Single-table `#CURRENT` / `VERSION#` SK pattern | Separate `ExamItemVersions` table | Atomic writes; no cross-table transactions required |
 | Pagination | `offset` / `limit` | DynamoDB `LastEvaluatedKey` cursor | Simpler implementation; cursor is more efficient at scale |
-| Authentication | None | JWT / Lambda authorizer | Out of scope for this challenge |
+| Authentication | None | JWT / Lambda authorizer | Ran out of time (didn't prioritize correctly) |
 | API Gateway type | REST API | HTTP API | REST API supports `{id}` path parameter syntax and matches `APIGatewayProxyEvent` that handlers already use |
 | Lambda bundling | esbuild via `NodejsFunction`, `externalModules: []` | Ship `node_modules` in ZIP | Smaller artifacts, faster cold starts; aws-sdk v3 bundled explicitly since the runtime only ships v2 |
 | CDK package isolation | Separate `infrastructure/package.json` | Monorepo root deps | Keeps CDK tooling out of the application bundle; `node_modules` trees don't mix |
 | List filtering | GSI per filter field | Single Scan + filter | GSI avoids full-table Scans as data grows |
+
+## Future improvements
+
+### Priority 1 (critical for production readiness)
+
+- More human review
+- Add API authentication (JWT authorizer or Lambda authorizer)
+- Send SNS messages on item status changes (e.g., when an item moves from `draft` to `review` or `approved`) to trigger downstream workflows with SQS consumers. This allows for a CQRS pattern where this service is the management of items, and another service handles the distribution of approved items. This allows for better separation of concerns and scalability as the system grows.
+- Implement a CI/CD pipeline for automated testing and deployment
+- Add more comprehensive unit and integration tests, including edge cases and error handling
+- Add structured logging with correlation IDs for tracing requests across services. Consider using Datadog or another logging platform for better observability.
+
+### Priority 2 (important but not critical)
+
+- Add CloudWatch Alarms for Lambda errors and throttling
+- Implement cursor-based pagination with `LastEvaluatedKey`
+- Add API documentation (e.g., OpenAPI/Swagger) for better developer experience and client generation
+
+### Priority 3 (nice-to-have features)
+
+- Implement soft deletes with a `deleted` boolean and GSI for non-deleted items
+- Add support for batch operations (e.g., batch create, batch update) to improve efficiency for bulk changes
+- Add support for partial updates (PATCH) to allow clients to update only specific fields without sending the entire item payload
+- Implement a more flexible metadata structure, allowing for arbitrary key-value pairs without requiring schema changes
+- Add support for exporting data (e.g., CSV or JSON export of items and audit trails) for reporting and analysis purposes
+- Implement a more robust error handling strategy, including retries for transient errors and better error messages for clients
+- Add support for language localization in item content and metadata to support diverse student populations and future expansion to international markets
+- Add performance testing and optimization, especially for list operations as the dataset grows, to ensure the service remains responsive under load.
+
+## Frontend client
+
+- Implement a frontend client (e.g., React app) to manage the data and interact with the API. This will require additional endpoints for authentication and user management (probably through AWS Cognito), as well as UI components for creating, updating, and listing items.
+
+### Nice-to-have feature
+
+- Add support for calling AI services for draft quiz question generation, and generation of explanations and distractors for multiple-choice questions. This might involve RAG, but should be in a different service than this repo.
+
