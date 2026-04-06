@@ -40,7 +40,7 @@ export const ListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
   offset: z.coerce.number().int().min(0).default(0),
   subject: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(['draft', 'review', 'approved', 'archived']).optional(),
 });
 
 export type CreateItemInput = z.infer<typeof CreateItemSchema>;

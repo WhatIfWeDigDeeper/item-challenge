@@ -47,7 +47,11 @@ export interface UpdateItemRequest {
   itemType?: string;
   difficulty?: number;
   content?: Partial<ExamItem["content"]>;
-  metadata?: Partial<ExamItem["metadata"]>;
+  metadata?: {
+    author?: string;
+    status?: string;
+    tags?: string[];
+  };
   securityLevel?: string;
 }
 
