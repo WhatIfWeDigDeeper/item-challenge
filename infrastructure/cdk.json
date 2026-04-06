@@ -9,7 +9,6 @@
     "@aws-cdk/aws-iam:minimizePolicies": true,
     "@aws-cdk/core:bootstrapQualifier": "hnb659fds",
     "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:enableStackNameDuplicates": true,
     "@aws-cdk/core:newStyleStackSynthesis": true,
     "aws-cdk:enableDiffNoFail": true
   }
