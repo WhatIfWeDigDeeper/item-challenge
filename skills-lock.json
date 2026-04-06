@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": {
+    "js-deps": {
+      "source": "whatifwedigdeeper/agent-skills",
+      "sourceType": "github",
+      "computedHash": "a12b89d2b71746cea8211d1fd8c5e3392f83c2b271b79b8ced9244729136f50a"
+    },
+    "learn": {
+      "source": "whatifwedigdeeper/agent-skills",
+      "sourceType": "github",
+      "computedHash": "f3c748fd50ad6d57ce0f015c384c0c62b4a830ce9f4063f6c424eb76057b7aed"
+    },
+    "mermaid-diagrams": {
+      "source": "softaworks/agent-toolkit",
+      "sourceType": "github",
+      "computedHash": "6d36e69adad781f106a2fb4b19ebc22bf0c211babdc0d1ae5822fa65abb48bd8"
+    },
+    "ship-it": {
+      "source": "whatifwedigdeeper/agent-skills",
+      "sourceType": "github",
+      "computedHash": "f8fc2b7ef2eb0f8548a73a40f3db7e7e02b4b4fbef81892a4517a0f47327ec1b"
+    }
+  }
+}
