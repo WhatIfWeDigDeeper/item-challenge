@@ -6,11 +6,6 @@ import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { Construct } from 'constructs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
-
-// __dirname is not available in ESM (NodeNext) modules — reconstruct it from import.meta.url
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export class ExamItemsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
