@@ -48,9 +48,6 @@ async function waitForServer(maxWaitMs = 10000): Promise<void> {
 }
 
 beforeAll(async () => {
-  // DynamoDB Local is started and a table is created to validate Docker/AWS SDK plumbing
-  // even though the server runs with USE_DYNAMODB=false (in-memory) in Phase 1.
-  // Flip USE_DYNAMODB to 'true' in the spawn env after Phase 2 (DynamoDB storage implementation).
   await waitForDynamoDB();
 
   try {
@@ -63,6 +60,26 @@ beforeAll(async () => {
       AttributeDefinitions: [
         { AttributeName: 'id', AttributeType: 'S' },
         { AttributeName: 'sk', AttributeType: 'S' },
+        { AttributeName: 'subject', AttributeType: 'S' },
+        { AttributeName: 'itemStatus', AttributeType: 'S' },
+      ],
+      GlobalSecondaryIndexes: [
+        {
+          IndexName: 'SubjectIndex',
+          KeySchema: [
+            { AttributeName: 'subject', KeyType: 'HASH' },
+            { AttributeName: 'sk', KeyType: 'RANGE' },
+          ],
+          Projection: { ProjectionType: 'ALL' },
+        },
+        {
+          IndexName: 'StatusIndex',
+          KeySchema: [
+            { AttributeName: 'itemStatus', KeyType: 'HASH' },
+            { AttributeName: 'sk', KeyType: 'RANGE' },
+          ],
+          Projection: { ProjectionType: 'ALL' },
+        },
       ],
       BillingMode: 'PAY_PER_REQUEST',
     }));
@@ -75,7 +92,7 @@ beforeAll(async () => {
     env: {
       ...process.env,
       PORT: '3001',
-      USE_DYNAMODB: 'false',           // Phase 2: change to 'true'
+      USE_DYNAMODB: 'true',
       DYNAMODB_TABLE_NAME: TABLE_NAME,
       DYNAMODB_ENDPOINT,
       AWS_REGION: 'us-east-1',

@@ -24,7 +24,7 @@ Zero-padded version numbers in the SK (`VERSION#0001`, `VERSION#0002`, …) ensu
 | Create item     | `TransactWriteItems` → atomic write of `ITEM` + `VERSION#0001` records |
 | Get item        | `GetItem(id, ITEM)` |
 | Update item     | `TransactWriteItems` → atomic overwrite of `ITEM` + new `VERSION#NNNN` snapshot |
-| List items      | `Scan` with `FilterExpression sk = ITEM`; client-side offset/limit |
+| List items      | `Query` on `SubjectIndex` (subject filter) or `StatusIndex` (status filter); `Scan` with `FilterExpression sk = ITEM` when no filters; client-side offset/limit |
 | Create version  | `TransactWriteItems` → atomic overwrite of `ITEM` + new `VERSION#NNNN` snapshot |
 | Get audit trail | `Query(id)` with SK `begins_with VERSION#` |
 

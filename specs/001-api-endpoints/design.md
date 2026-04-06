@@ -157,11 +157,11 @@ Runs `amazon/dynamodb-local` on port 8000. Tests expect it running before the su
 
 ### npm script
 ```json
-"test:api": "docker-compose -f tests/api/docker-compose.yml up -d && vitest run tests/api; docker-compose -f tests/api/docker-compose.yml down"
+"test:api": "docker-compose -f tests/api/docker-compose.yml up -d && vitest run --config tests/api/vitest.config.ts; status=$?; docker-compose -f tests/api/docker-compose.yml down; exit $status"
 ```
 
 ### `setup.ts`
-- `beforeAll`: polls DynamoDB Local with `ListTablesCommand` until ready (max 10s), creates table (partition key `id` + sort key `sk`), starts HTTP server on port 3001 with `PORT=3001 USE_DYNAMODB=false` (server runs in-memory; DynamoDB Local validates Docker/SDK plumbing only)
+- `beforeAll`: polls DynamoDB Local with `ListTablesCommand` until ready (max 10s), creates table (partition key `id` + sort key `sk`, GSIs for `SubjectIndex` and `StatusIndex`), starts HTTP server on port 3001 with `PORT=3001 USE_DYNAMODB=true` pointing at DynamoDB Local
 - `afterAll`: deletes table, shuts down server
 
 ### `items.api.test.ts`
