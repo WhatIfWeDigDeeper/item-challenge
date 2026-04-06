@@ -1,11 +1,6 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
-import { createItemHandler } from './handlers/create-item.js';
-import { getItemHandler } from './handlers/get-item.js';
-import { updateItemHandler } from './handlers/update-item.js';
-import { listItemsHandler } from './handlers/list-items.js';
-import { createVersionHandler } from './handlers/create-version.js';
-import { getAuditHandler } from './handlers/get-audit.js';
+import { route } from './routes/index.js';
 
 const PORT = process.env.PORT || 3000;
 
@@ -58,23 +53,13 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const queryStringParameters = Object.keys(qs).length ? qs : null;
     const body = rawBody || null;
 
-    let result;
-
-    if (method === 'POST' && parts.length === 2 && parts[1] === 'items') {
-      result = await createItemHandler(buildEvent(req, body, null, null));
-    } else if (method === 'GET' && parts.length === 2 && parts[1] === 'items') {
-      result = await listItemsHandler(buildEvent(req, null, null, queryStringParameters));
-    } else if (method === 'GET' && parts.length === 3 && parts[1] === 'items') {
-      result = await getItemHandler(buildEvent(req, null, { id: parts[2] }, null));
-    } else if (method === 'PUT' && parts.length === 3 && parts[1] === 'items') {
-      result = await updateItemHandler(buildEvent(req, body, { id: parts[2] }, null));
-    } else if (method === 'POST' && parts.length === 4 && parts[1] === 'items' && parts[3] === 'versions') {
-      result = await createVersionHandler(buildEvent(req, null, { id: parts[2] }, null));
-    } else if (method === 'GET' && parts.length === 4 && parts[1] === 'items' && parts[3] === 'audit') {
-      result = await getAuditHandler(buildEvent(req, null, { id: parts[2] }, null));
-    } else {
-      result = { statusCode: 404, body: JSON.stringify({ error: 'Route not found' }) };
-    }
+    const result = await route(
+      method ?? 'GET',
+      parts,
+      (pathParameters, queryStringParameters, body) => buildEvent(req, body, pathParameters, queryStringParameters),
+      body,
+      queryStringParameters,
+    );
 
     res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
     res.end(result.body);
