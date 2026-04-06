@@ -199,3 +199,34 @@ describe('listItemsHandler', () => {
     expect(body.offset).toBe(1);
   });
 });
+
+describe('createVersionHandler', () => {
+  it('returns 201 with snapshot of current state (no request body needed)', async () => {
+    const created = await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    const { id } = JSON.parse(created.body);
+
+    const result = await createVersionHandler(makeEvent({ httpMethod: 'POST', pathParameters: { id } }));
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(201);
+    expect(body.id).toBe(id);
+    expect(body.metadata.version).toBe(2);
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const result = await createVersionHandler(makeEvent({
+      httpMethod: 'POST',
+      pathParameters: { id: 'does-not-exist' },
+    }));
+    expect(result.statusCode).toBe(404);
+  });
+
+  it('increments version number on each call', async () => {
+    const created = await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    const { id } = JSON.parse(created.body);
+
+    await createVersionHandler(makeEvent({ httpMethod: 'POST', pathParameters: { id } }));
+    const result = await createVersionHandler(makeEvent({ httpMethod: 'POST', pathParameters: { id } }));
+    const body = JSON.parse(result.body);
+    expect(body.metadata.version).toBe(3);
+  });
+});
