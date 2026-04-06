@@ -80,3 +80,23 @@ describe('createItemHandler', () => {
     expect(body.error).toBe('Validation failed');
   });
 });
+
+describe('getItemHandler', () => {
+  it('returns 200 with the item when it exists', async () => {
+    const created = await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    const { id } = JSON.parse(created.body);
+
+    const result = await getItemHandler(makeEvent({ pathParameters: { id } }));
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(200);
+    expect(body.id).toBe(id);
+    expect(body.subject).toBe('AP Biology');
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const result = await getItemHandler(makeEvent({ pathParameters: { id: 'does-not-exist' } }));
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(404);
+    expect(body.error).toBe('Item not found');
+  });
+});
