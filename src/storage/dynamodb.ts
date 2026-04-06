@@ -54,10 +54,15 @@ export class DynamoDBStorage implements ItemStorage {
       },
     };
 
-    // sk is required by the composite primary key; 'ITEM' identifies the base record
+    // sk is required by the composite primary key; 'ITEM' identifies the base record.
+    // VERSION#0001 is written alongside so the audit trail starts at creation.
     await this.client.send(new PutCommand({
       TableName: this.tableName,
       Item: { ...item, sk: 'ITEM' },
+    }));
+    await this.client.send(new PutCommand({
+      TableName: this.tableName,
+      Item: { ...item, sk: 'VERSION#0001' },
     }));
 
     return item;
@@ -90,9 +95,14 @@ export class DynamoDBStorage implements ItemStorage {
       },
     };
 
+    const versionSk = `VERSION#${String(updated.metadata.version).padStart(4, '0')}`;
     await this.client.send(new PutCommand({
       TableName: this.tableName,
       Item: { ...updated, sk: 'ITEM' },
+    }));
+    await this.client.send(new PutCommand({
+      TableName: this.tableName,
+      Item: { ...updated, sk: versionSk },
     }));
 
     return updated;
@@ -135,22 +145,27 @@ export class DynamoDBStorage implements ItemStorage {
     const current = await this.getItem(id);
     if (!current) return null;
 
-    // Count existing version records to determine next version number
-    const countResult = await this.client.send(new QueryCommand({
-      TableName: this.tableName,
-      KeyConditionExpression: 'id = :id AND begins_with(sk, :prefix)',
-      ExpressionAttributeValues: { ':id': id, ':prefix': 'VERSION#' },
-      Select: 'COUNT',
-    }));
-    const nextVersion = (countResult.Count ?? 0) + 1;
-    const versionSk = `VERSION#${String(nextVersion).padStart(4, '0')}`;
+    // Increment version and update lastModified — consistent with MemoryStorage behavior
+    const updated: ExamItem = {
+      ...current,
+      metadata: {
+        ...current.metadata,
+        version: current.metadata.version + 1,
+        lastModified: Date.now(),
+      },
+    };
+    const versionSk = `VERSION#${String(updated.metadata.version).padStart(4, '0')}`;
 
     await this.client.send(new PutCommand({
       TableName: this.tableName,
-      Item: { ...current, sk: versionSk },
+      Item: { ...updated, sk: 'ITEM' },
+    }));
+    await this.client.send(new PutCommand({
+      TableName: this.tableName,
+      Item: { ...updated, sk: versionSk },
     }));
 
-    return current;
+    return updated;
   }
 
   async getAuditTrail(id: string): Promise<ExamItem[]> {

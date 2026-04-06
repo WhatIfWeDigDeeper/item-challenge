@@ -207,9 +207,7 @@ curl -s 'http://localhost:3000/api/items?status=draft&limit=10&offset=0'
 
 **Create a new version**
 ```bash
-curl -s -X POST http://localhost:3000/api/items/<id>/versions \
-  -H 'Content-Type: application/json' \
-  -d '{"difficulty": 5, "metadata": {"status": "approved"}}'
+curl -s -X POST http://localhost:3000/api/items/<id>/versions
 ```
 
 **Get audit trail**
@@ -223,7 +221,7 @@ curl -s http://localhost:3000/api/items/<id>/audit
 
 | Decision | Chosen approach | Alternative | Reason |
 |----------|----------------|-------------|--------|
-| Versioning storage | Single-table `#CURRENT` / `VERSION#` SK pattern | Separate `ExamItemVersions` table | Atomic writes; no cross-table transactions required |
+| Versioning storage | Single-table `ITEM` / `VERSION#` SK pattern | Separate `ExamItemVersions` table | Simpler key structure; VERSION# snapshots written on create, update, and createVersion |
 | Pagination | `offset` / `limit` | DynamoDB `LastEvaluatedKey` cursor | Simpler implementation; cursor is more efficient at scale |
 | Authentication | None | JWT / Lambda authorizer | Ran out of time (didn't prioritize correctly) |
 | API Gateway type | REST API | HTTP API | REST API supports `{id}` path parameter syntax and matches `APIGatewayProxyEvent` that handlers already use |

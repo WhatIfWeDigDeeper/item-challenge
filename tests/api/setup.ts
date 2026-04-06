@@ -4,6 +4,7 @@ import {
   CreateTableCommand,
   DeleteTableCommand,
   ListTablesCommand,
+  ResourceInUseException,
 } from '@aws-sdk/client-dynamodb';
 import { spawn, ChildProcess } from 'child_process';
 
@@ -52,18 +53,23 @@ beforeAll(async () => {
   // Flip USE_DYNAMODB to 'true' in the spawn env after Phase 2 (DynamoDB storage implementation).
   await waitForDynamoDB();
 
-  await dynamoClient.send(new CreateTableCommand({
-    TableName: TABLE_NAME,
-    KeySchema: [
-      { AttributeName: 'id', KeyType: 'HASH' },
-      { AttributeName: 'sk', KeyType: 'RANGE' },
-    ],
-    AttributeDefinitions: [
-      { AttributeName: 'id', AttributeType: 'S' },
-      { AttributeName: 'sk', AttributeType: 'S' },
-    ],
-    BillingMode: 'PAY_PER_REQUEST',
-  }));
+  try {
+    await dynamoClient.send(new CreateTableCommand({
+      TableName: TABLE_NAME,
+      KeySchema: [
+        { AttributeName: 'id', KeyType: 'HASH' },
+        { AttributeName: 'sk', KeyType: 'RANGE' },
+      ],
+      AttributeDefinitions: [
+        { AttributeName: 'id', AttributeType: 'S' },
+        { AttributeName: 'sk', AttributeType: 'S' },
+      ],
+      BillingMode: 'PAY_PER_REQUEST',
+    }));
+  } catch (err) {
+    if (!(err instanceof ResourceInUseException)) throw err;
+    // Table already exists from a previous run — reuse it
+  }
 
   serverProcess = spawn('pnpm', ['tsx', 'src/server.ts'], {
     env: {
@@ -81,6 +87,7 @@ beforeAll(async () => {
   });
 
   serverProcess.stderr?.on('data', (d: Buffer) => process.stderr.write(d));
+  serverProcess.stdout?.on('data', (_d: Buffer) => { /* drain stdout to prevent pipe buffer fill */ });
 
   await waitForServer();
 }, 30000);

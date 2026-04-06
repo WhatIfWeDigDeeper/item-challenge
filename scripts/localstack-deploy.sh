@@ -92,8 +92,8 @@ RESPONSE=$(curl -sf -X POST "$API_URL/api/items" \
       "tags": []
     }
   }') || {
-  echo "WARNING: POST /api/items failed (this may be expected if DynamoDB storage is not fully implemented)"
-  exit 0
+  echo "ERROR: POST /api/items failed — smoke test did not pass"
+  exit 1
 }
 
 echo "    Response: $RESPONSE"

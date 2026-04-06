@@ -161,7 +161,7 @@ Runs `amazon/dynamodb-local` on port 8000. Tests expect it running before the su
 ```
 
 ### `setup.ts`
-- `beforeAll`: polls DynamoDB Local with `ListTablesCommand` until ready (max 10s), creates table (partition key `id`), starts HTTP server on port 3001 with `PORT=3001 USE_DYNAMODB=true DYNAMODB_ENDPOINT=http://localhost:8000`
+- `beforeAll`: polls DynamoDB Local with `ListTablesCommand` until ready (max 10s), creates table (partition key `id` + sort key `sk`), starts HTTP server on port 3001 with `PORT=3001 USE_DYNAMODB=false` (server runs in-memory; DynamoDB Local validates Docker/SDK plumbing only)
 - `afterAll`: deletes table, shuts down server
 
 ### `items.api.test.ts`

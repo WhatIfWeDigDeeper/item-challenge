@@ -20,7 +20,7 @@ pnpm test:ui          # Interactive Vitest UI
 
 Run a single test file:
 ```bash
-pnpm vitest run src/__tests__/example.test.ts
+pnpm vitest run src/__tests__/items.test.ts
 ```
 
 Optional DynamoDB storage (instead of in-memory default):
