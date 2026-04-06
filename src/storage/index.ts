@@ -1,22 +1,25 @@
-/**
- * Storage Factory
- *
- * Automatically selects the appropriate storage backend based on environment variables.
- * Defaults to in-memory storage for easy local development.
- */
-
 import { ItemStorage } from './interface.js';
 import { MemoryStorage } from './memory.js';
 import { DynamoDBStorage } from './dynamodb.js';
 
-export function createStorage(): ItemStorage {
-  if (process.env.USE_DYNAMODB === 'true') {
-    console.log('📦 Using DynamoDB storage');
-    return new DynamoDBStorage();
-  }
+let instance: ItemStorage | null = null;
 
-  console.log('📦 Using in-memory storage');
-  return new MemoryStorage();
+export function createStorage(): ItemStorage {
+  if (!instance) {
+    if (process.env.USE_DYNAMODB === 'true') {
+      console.log('📦 Using DynamoDB storage');
+      instance = new DynamoDBStorage();
+    } else {
+      console.log('📦 Using in-memory storage');
+      instance = new MemoryStorage();
+    }
+  }
+  return instance;
+}
+
+/** For testing only — forces next createStorage() call to create a fresh instance. */
+export function _resetStorageForTesting(): void {
+  instance = null;
 }
 
 export * from './interface.js';
