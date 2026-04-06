@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:api": "docker-compose -f tests/api/docker-compose.yml up -d && vitest run tests/api; docker-compose -f tests/api/docker-compose.yml down"
   },
   "keywords": [],
   "author": "",
