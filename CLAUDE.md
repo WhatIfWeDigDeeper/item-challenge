@@ -61,11 +61,23 @@ Six endpoints to implement:
 
 ## Infrastructure as Code
 
-The challenge expects either AWS CDK or Terraform. The stack needs: Lambda functions, API Gateway, and DynamoDB table. No IaC scaffolding exists yet — this is a required deliverable.
+The challenge expects either AWS CDK or Terraform. The stack needs: Lambda functions, API Gateway, and DynamoDB table. CDK infrastructure lives in `infrastructure/` (standalone package).
+
+**CDK assertion test gotcha:** Never use `resourceCountIs('AWS::Lambda::Function', N)` when `logs.LogGroup` constructs with `RetentionDays` are present — CDK synthesizes an additional `Custom::LogRetention` Lambda internally, making the total higher than the number of application Lambdas. Filter by runtime instead:
+```ts
+const appFns = template.findResources('AWS::Lambda::Function', { Properties: { Runtime: 'nodejs22.x' } });
+expect(Object.keys(appFns).length).toBe(6);
+```
 
 ## Testing
 
 Tests live in `src/__tests__/`. Vitest is configured with globals enabled (no import needed for `describe`, `it`, `expect`). Coverage via V8 reports to `coverage/`.
+
+CDK infrastructure tests must run separately — they require `esbuild` which is only installed inside `infrastructure/`:
+```bash
+cd infrastructure && npm install && npm test
+```
+The root `vitest.config.ts` excludes `infrastructure/**` and `.pnpm-store/**` to prevent the root test runner from picking them up. Do not remove those exclusions.
 
 ## Environment
 
