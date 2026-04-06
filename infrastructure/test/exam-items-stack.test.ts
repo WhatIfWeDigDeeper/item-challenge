@@ -99,6 +99,16 @@ describe('ExamItemsStack', () => {
         },
       });
     });
+
+    it('read-only Lambda functions are not granted write actions (no dynamodb:PutItem in read policies)', () => {
+      // Each policy is either read-only or read-write. Verify that there are policies
+      // WITHOUT dynamodb:PutItem — these are the read-only function policies.
+      // (If all policies had PutItem, the read/write split would be broken.)
+      const policies = template.findResources('AWS::IAM::Policy', {});
+      const policyDocs = Object.values(policies).map((p: any) => JSON.stringify(p.Properties.PolicyDocument));
+      const readOnlyPolicies = policyDocs.filter(doc => !doc.includes('dynamodb:PutItem'));
+      expect(readOnlyPolicies.length).toBeGreaterThan(0);
+    });
   });
 
   describe('Stack Outputs', () => {

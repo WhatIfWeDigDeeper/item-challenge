@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { Construct } from 'constructs';
@@ -54,8 +55,8 @@ export class ExamItemsStack extends cdk.Stack {
     // externalModules: [] ensures aws-sdk v3 is bundled rather than relying on
     // the Lambda runtime layer, which only includes v2 by default on older runtimes.
     // ---------------------------------------------------------------------------
-    const createHandlerFunction = (id: string, handlerFile: string, handlerExport: string) => {
-      return new nodejs.NodejsFunction(this, id, {
+    const createHandlerFunction = (id: string, handlerFile: string, handlerExport: string): nodejs.NodejsFunction => {
+      const fn = new nodejs.NodejsFunction(this, id, {
         entry: path.join(__dirname, '../../src/handlers', handlerFile),
         handler: handlerExport,
         runtime: lambda.Runtime.NODEJS_22_X,
@@ -73,6 +74,16 @@ export class ExamItemsStack extends cdk.Stack {
           externalModules: [],
         },
       });
+
+      // Explicit log group: ONE_WEEK retention avoids infinite log accumulation;
+      // DESTROY ensures cdk destroy cleans up (otherwise Lambda auto-creates groups are orphaned).
+      new logs.LogGroup(this, `${id}LogGroup`, {
+        logGroupName: `/aws/lambda/${fn.functionName}`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+
+      return fn;
     };
 
     // ---------------------------------------------------------------------------
