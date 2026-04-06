@@ -52,3 +52,31 @@ beforeEach(() => {
   process.env.USE_DYNAMODB = 'false';
   _resetStorageForTesting();
 });
+
+describe('createItemHandler', () => {
+  it('returns 201 with created item', async () => {
+    const result = await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(201);
+    expect(body).toHaveProperty('id');
+    expect(body.subject).toBe('AP Biology');
+    expect(body.metadata.version).toBe(1);
+    expect(body.metadata).toHaveProperty('created');
+    expect(body.metadata).toHaveProperty('lastModified');
+  });
+
+  it('returns 400 when required fields are missing', async () => {
+    const result = await createItemHandler(makeEvent({ httpMethod: 'POST', body: { subject: 'Only Subject' } }));
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(400);
+    expect(body.error).toBe('Validation failed');
+    expect(body).toHaveProperty('details');
+  });
+
+  it('returns 400 when difficulty is out of range', async () => {
+    const result = await createItemHandler(makeEvent({ httpMethod: 'POST', body: { ...validItem, difficulty: 10 } }));
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(400);
+    expect(body.error).toBe('Validation failed');
+  });
+});
