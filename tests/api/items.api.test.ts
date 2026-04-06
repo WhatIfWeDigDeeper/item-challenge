@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import './setup.js';
 import { BASE_URL } from './setup.js';
 
 const validItem = {

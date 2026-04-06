@@ -47,6 +47,9 @@ async function waitForServer(maxWaitMs = 10000): Promise<void> {
 }
 
 beforeAll(async () => {
+  // DynamoDB Local is started and a table is created to validate Docker/AWS SDK plumbing
+  // even though the server runs with USE_DYNAMODB=false (in-memory) in Phase 1.
+  // Flip USE_DYNAMODB to 'true' in the spawn env after Phase 2 (DynamoDB storage implementation).
   await waitForDynamoDB();
 
   await dynamoClient.send(new CreateTableCommand({
@@ -83,7 +86,13 @@ beforeAll(async () => {
 }, 30000);
 
 afterAll(async () => {
-  serverProcess?.kill('SIGTERM');
+  if (serverProcess) {
+    const exitPromise = new Promise<void>(resolve => {
+      serverProcess.on('close', () => resolve());
+    });
+    serverProcess.kill('SIGTERM');
+    await Promise.race([exitPromise, new Promise<void>(r => setTimeout(r, 5000))]);
+  }
   try {
     await dynamoClient.send(new DeleteTableCommand({ TableName: TABLE_NAME }));
   } catch {
