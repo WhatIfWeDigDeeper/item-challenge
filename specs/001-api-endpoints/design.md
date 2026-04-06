@@ -161,7 +161,7 @@ Runs `amazon/dynamodb-local` on port 8000. Tests expect it running before the su
 
 ### `items.api.test.ts`
 - Targets `http://localhost:3001`
-- Env: `USE_DYNAMODB=true`, `DYNAMODB_ENDPOINT=http://localhost:8000`, dummy AWS creds
+- Env: `USE_DYNAMODB=true`, `DYNAMODB_ENDPOINT=http://localhost:8000`, dummy AWS credentials
 - Covers happy path for all 6 endpoints + selected error cases (404, 400)
 - Uses Node 22 built-in `fetch` — no additional dependencies
 
@@ -189,13 +189,21 @@ AWS_SECRET_ACCESS_KEY=local
 
 **Table name:** `ExamItems`  
 **Partition key:** `id` (string, UUID)  
-**Sort key:** none on primary table
+**Sort key:** `sk` (string)
 
-**Versioning strategy:** A second table `ExamItemVersions` with composite key `id` (PK) + `version` (SK, number). `createVersion` and `getAuditTrail` operate on this table. The main table always holds the current version.
+**Key patterns:**
+| Record type | PK | SK |
+|-------------|----|----|
+| Current item | `<uuid>` | `#CURRENT` |
+| Version snapshot | `<uuid>` | `VERSION#0001`, `VERSION#0002`, … |
+
+Zero-padded version numbers in the SK ensure lexicographic sort order matches version order.
+
+**Versioning strategy:** Single-table design. On every create/update/createVersion, a `TransactWriteItems` atomically writes both the `#CURRENT` record and a new `VERSION#NNNN` snapshot. `getAuditTrail` uses a `Query` on PK=`id` with SK beginning with `VERSION#` — returns all snapshots in version order in one call. No second table, no cross-table coordination.
 
 **GSIs:**
-- `SubjectIndex`: partition key `subject` — supports `GET /api/items?subject=X` without Scan
-- `StatusIndex`: partition key `itemStatus` (top-level denormalized copy of `metadata.status`) — DynamoDB cannot index nested attributes, so `itemStatus` is written as a top-level field alongside `metadata.status` at create/update time. Supports `GET /api/items?status=X` without Scan.
+- `SubjectIndex`: partition key `subject`, SK `sk` — supports `GET /api/items?subject=X` filtered to `sk = #CURRENT` without Scan
+- `StatusIndex`: partition key `itemStatus` (top-level denormalized copy of `metadata.status`), SK `sk` — DynamoDB cannot index nested attributes, so `itemStatus` is written as a top-level field alongside `metadata.status` at create/update time. Supports `GET /api/items?status=X` filtered to `sk = #CURRENT` without Scan.
 
 ### Infrastructure Choices (preview for Phase 2)
 - API Gateway (HTTP API) → Lambda (one function per endpoint) → DynamoDB
@@ -213,7 +221,7 @@ AWS_SECRET_ACCESS_KEY=local
 
 ### Trade-offs
 - `offset`-based pagination is simple but inefficient at scale; DynamoDB's `LastEvaluatedKey` cursor is better for production
-- DynamoDB `createVersion`/`getAuditTrail` use a separate table — adds complexity but keeps the primary table clean and cheap to query
+- Single-table versioning (`#CURRENT` + `VERSION#NNNN` SK pattern) avoids cross-table transactions but means `listItems` GSI queries must filter to `sk = #CURRENT` to exclude version records
 - No auth in Phase 1 — accepted to keep scope focused
 
 ---
@@ -223,4 +231,4 @@ AWS_SECRET_ACCESS_KEY=local
 - CDK / Terraform infrastructure (Phase 2: `specs/002-cdk`)
 - Authentication / authorization
 - Cursor-based pagination
-- DynamoDB `createVersion` / `getAuditTrail` implementation (MemoryStorage works; DynamoDB stubs noted)
+- DynamoDB storage implementation (MemoryStorage is sufficient for Phase 1; DynamoDB single-table design is documented for Phase 2)
