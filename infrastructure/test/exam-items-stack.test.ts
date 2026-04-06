@@ -85,13 +85,15 @@ describe('ExamItemsStack', () => {
 
   describe('IAM', () => {
     it('grants DynamoDB access to Lambda functions via IAM policies', () => {
-      // Verify IAM policies exist granting DynamoDB actions
+      // CDK grantReadWriteData emits specific actions (not dynamodb:*).
+      // Verify at least one policy grants both read and write DynamoDB actions.
       template.hasResourceProperties('AWS::IAM::Policy', {
         PolicyDocument: {
           Statement: Match.arrayWith([
             Match.objectLike({
               Action: Match.arrayWith([
-                Match.stringLike('dynamodb:*'),
+                'dynamodb:GetItem',
+                'dynamodb:PutItem',
               ]),
               Effect: 'Allow',
             }),
