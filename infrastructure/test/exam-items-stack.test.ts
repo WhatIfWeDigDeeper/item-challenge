@@ -53,21 +53,21 @@ describe('ExamItemsStack', () => {
   });
 
   describe('Lambda Functions', () => {
-    it('creates exactly 6 Lambda functions', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 6);
+    it('creates exactly 6 application Lambda functions', () => {
+      // CDK synthesizes extra Lambdas for custom resources (e.g. LogRetention),
+      // so we filter by nodejs22.x runtime to count only application Lambdas.
+      const appFunctions = template.findResources('AWS::Lambda::Function', {
+        Properties: { Runtime: 'nodejs22.x' },
+      });
+      expect(Object.keys(appFunctions).length).toBe(6);
     });
 
     it('all Lambda functions use Node.js 22.x runtime', () => {
-      // hasResourceProperties checks at least one match; we also verify the total count
-      // to ensure all 6 functions use the correct runtime (no stragglers using an older runtime).
+      // Exactly 6 application Lambdas use nodejs22.x; CDK custom-resource Lambdas use a different runtime and are excluded.
+      // Count is already asserted in the previous test — this verifies the runtime value is correct.
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs22.x',
       });
-      // Count functions with the correct runtime — must match total Lambda count of 6
-      const functions = template.findResources('AWS::Lambda::Function', {
-        Properties: { Runtime: 'nodejs22.x' },
-      });
-      expect(Object.keys(functions).length).toBe(6);
     });
   });
 
@@ -100,13 +100,15 @@ describe('ExamItemsStack', () => {
       });
     });
 
-    it('read-only Lambda functions are not granted write actions (no dynamodb:PutItem in read policies)', () => {
-      // Each policy is either read-only or read-write. Verify that there are policies
-      // WITHOUT dynamodb:PutItem — these are the read-only function policies.
-      // (If all policies had PutItem, the read/write split would be broken.)
+    it('read-only Lambda functions are not granted write actions', () => {
+      // CDK grantReadData emits specific read actions; grantReadWriteData emits dynamodb:*.
+      // Verify at least one policy exists that contains only read actions and NOT the
+      // write wildcard — confirming the read/write split is in effect.
       const policies = template.findResources('AWS::IAM::Policy', {});
       const policyDocs = Object.values(policies).map((p: any) => JSON.stringify(p.Properties.PolicyDocument));
-      const readOnlyPolicies = policyDocs.filter(doc => !doc.includes('dynamodb:PutItem'));
+      const readOnlyPolicies = policyDocs.filter(
+        (doc) => doc.includes('dynamodb:GetItem') && !doc.includes('dynamodb:*'),
+      );
       expect(readOnlyPolicies.length).toBeGreaterThan(0);
     });
   });

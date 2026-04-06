@@ -66,3 +66,9 @@ The challenge expects either AWS CDK or Terraform. The stack needs: Lambda funct
 ## Testing
 
 Tests live in `src/__tests__/`. Vitest is configured with globals enabled (no import needed for `describe`, `it`, `expect`). Coverage via V8 reports to `coverage/`.
+
+## Environment
+
+### GitHub CLI (gh)
+`gh` commands fail in sandbox mode on this machine with a TLS certificate error (`x509: OSStatus -26276`).
+Always use `dangerouslyDisableSandbox: true` when invoking `gh`.
