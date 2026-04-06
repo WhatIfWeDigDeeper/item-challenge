@@ -54,9 +54,10 @@ export class DynamoDBStorage implements ItemStorage {
       },
     };
 
+    // sk is required by the composite primary key; 'ITEM' identifies the base record
     await this.client.send(new PutCommand({
       TableName: this.tableName,
-      Item: item,
+      Item: { ...item, sk: 'ITEM' },
     }));
 
     return item;
@@ -65,10 +66,12 @@ export class DynamoDBStorage implements ItemStorage {
   async getItem(id: string): Promise<ExamItem | null> {
     const result = await this.client.send(new GetCommand({
       TableName: this.tableName,
-      Key: { id },
+      Key: { id, sk: 'ITEM' },
     }));
 
-    return result.Item as ExamItem || null;
+    if (!result.Item) return null;
+    const { sk: _sk, ...item } = result.Item;
+    return item as ExamItem;
   }
 
   async updateItem(id: string, data: UpdateItemRequest): Promise<ExamItem | null> {
@@ -89,22 +92,43 @@ export class DynamoDBStorage implements ItemStorage {
 
     await this.client.send(new PutCommand({
       TableName: this.tableName,
-      Item: updated,
+      Item: { ...updated, sk: 'ITEM' },
     }));
 
     return updated;
   }
 
   async listItems(query: ListItemsQuery): Promise<{ items: ExamItem[]; total: number }> {
-    // Note: This is a basic implementation using Scan
-    // For production, you should use Query with appropriate indexes
+    const filterParts: string[] = ['sk = :sk'];
+    const expressionAttributeValues: Record<string, unknown> = { ':sk': 'ITEM' };
+    const expressionAttributeNames: Record<string, string> = {};
+
+    if (query.subject) {
+      filterParts.push('#subject = :subject');
+      expressionAttributeNames['#subject'] = 'subject';
+      expressionAttributeValues[':subject'] = query.subject;
+    }
+
+    if (query.status) {
+      // metadata and status are reserved words in DynamoDB expression syntax
+      filterParts.push('#metadata.#status = :status');
+      expressionAttributeNames['#metadata'] = 'metadata';
+      expressionAttributeNames['#status'] = 'status';
+      expressionAttributeValues[':status'] = query.status;
+    }
+
     const result = await this.client.send(new ScanCommand({
       TableName: this.tableName,
-      Limit: query.limit || 10,
+      FilterExpression: filterParts.join(' AND '),
+      ExpressionAttributeValues: expressionAttributeValues,
+      ...(Object.keys(expressionAttributeNames).length > 0 && { ExpressionAttributeNames: expressionAttributeNames }),
     }));
 
-    const items = (result.Items || []) as ExamItem[];
-    return { items, total: result.Count || 0 };
+    // DynamoDB Limit caps items *scanned*, not returned — paginate client-side instead
+    const allItems = (result.Items || []).map(({ sk: _sk, ...item }) => item as ExamItem);
+    const offset = query.offset || 0;
+    const limit = query.limit || 10;
+    return { items: allItems.slice(offset, offset + limit), total: allItems.length };
   }
 
   async createVersion(id: string): Promise<ExamItem | null> {
