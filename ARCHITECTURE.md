@@ -117,6 +117,108 @@ Grant methods automatically include GSI ARNs — no manual enumeration required.
 
 ---
 
+## Commands
+
+### Application
+
+```bash
+pnpm install          # Install dependencies
+pnpm dev              # Start dev server with hot reload (http://localhost:3000)
+pnpm build            # Compile TypeScript → dist/
+pnpm start            # Run compiled output
+pnpm test             # Run unit tests once
+pnpm test:watch       # Run unit tests in watch mode
+pnpm test:api         # Run Docker-based API integration tests (requires Docker)
+```
+
+### Infrastructure
+
+```bash
+cd infrastructure
+pnpm install          # Install CDK + esbuild dependencies
+pnpm test             # Run CDK assertion tests (no deployment needed)
+pnpm synth            # Synthesize CloudFormation template
+npx cdk deploy        # Deploy to AWS (requires credentials + bootstrap)
+npx cdk destroy       # Tear down the stack
+```
+
+### LocalStack (deploy without AWS account)
+
+```bash
+docker compose -f docker-compose.localstack.yml up -d   # Start LocalStack
+cd infrastructure && pnpm install && cdklocal deploy      # Bootstrap + deploy
+pnpm --filter exam-items-infrastructure deploy:local      # Full deploy + smoke test
+```
+
+### Optional DynamoDB (instead of in-memory)
+
+```bash
+export USE_DYNAMODB=true
+export DYNAMODB_TABLE_NAME=ExamItems
+export DYNAMODB_ENDPOINT=http://localhost:8000   # for DynamoDB Local
+pnpm dev
+```
+
+### Debugging (VS Code)
+
+A launch configuration is defined in `.vscode/launch.json`. Open the **Run and Debug** panel (`⇧⌘D`), select **Debug Node**, and press `F5`. This starts `src/server.ts` via `tsx` with the VS Code debugger attached — breakpoints, watch expressions, and the debug console all work as expected.
+
+### API Curl Examples
+
+All examples assume `pnpm dev` is running on `http://localhost:3000`.
+
+**Create an item**
+```bash
+curl -s -X POST http://localhost:3000/api/items \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "subject": "AP Biology",
+    "itemType": "multiple-choice",
+    "difficulty": 3,
+    "content": {
+      "question": "What is photosynthesis?",
+      "options": ["A process in animals", "A process in plants", "A type of cell", "A chemical bond"],
+      "correctAnswer": "A process in plants",
+      "explanation": "Photosynthesis is the process by which plants convert light into energy."
+    },
+    "metadata": { "author": "jane.doe", "status": "draft", "tags": ["biology", "plants"] },
+    "securityLevel": "standard"
+  }'
+```
+
+**Get an item** (replace `<id>` with a real UUID from the create response)
+```bash
+curl -s http://localhost:3000/api/items/<id>
+```
+
+**Update an item**
+```bash
+curl -s -X PUT http://localhost:3000/api/items/<id> \
+  -H 'Content-Type: application/json' \
+  -d '{"difficulty": 4, "metadata": {"status": "review"}}'
+```
+
+**List items** (optional filters: `subject`, `status`, `limit`, `offset`)
+```bash
+curl -s 'http://localhost:3000/api/items'
+curl -s 'http://localhost:3000/api/items?subject=AP+Biology'
+curl -s 'http://localhost:3000/api/items?status=draft&limit=10&offset=0'
+```
+
+**Create a new version**
+```bash
+curl -s -X POST http://localhost:3000/api/items/<id>/versions \
+  -H 'Content-Type: application/json' \
+  -d '{"difficulty": 5, "metadata": {"status": "approved"}}'
+```
+
+**Get audit trail**
+```bash
+curl -s http://localhost:3000/api/items/<id>/audit
+```
+
+---
+
 ## Trade-offs
 
 | Decision | Chosen approach | Alternative | Reason |
