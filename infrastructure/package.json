@@ -13,6 +13,7 @@
     "constructs": "^10.4.2"
   },
   "devDependencies": {
+    "@types/node": "^20.14.9",
     "aws-cdk": "^2.170.0",
     "aws-cdk-local": "^2.21.0",
     "tsx": "^4.15.7",

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import 'aws-cdk-lib/region-info';
 import { App } from 'aws-cdk-lib';
 import { ExamItemsStack } from '../lib/exam-items-stack.js';
 
