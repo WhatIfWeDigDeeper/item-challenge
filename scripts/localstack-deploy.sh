@@ -12,6 +12,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INFRA_DIR="$SCRIPT_DIR/../infrastructure"
 LOCALSTACK_ENDPOINT="http://localhost:4566"
+STACK_NAME="${CDK_STACK_NAME:-ExamItemsStack}"
 NO_SMOKE_TEST="${1:-}"
 
 # Fake AWS credentials for LocalStack (it doesn't validate them)
@@ -34,12 +35,12 @@ cd "$INFRA_DIR"
 cdklocal bootstrap aws://000000000000/us-east-1 --require-approval never
 
 echo ""
-echo "==> Deploying ExamItemsStack to LocalStack..."
-cdklocal deploy ExamItemsStack --require-approval never --outputs-file /tmp/exam-items-outputs.json
+echo "==> Deploying $STACK_NAME to LocalStack..."
+cdklocal deploy "$STACK_NAME" --require-approval never --outputs-file /tmp/exam-items-outputs.json
 
 echo ""
 echo "==> Deployment complete! Stack outputs:"
-cat /tmp/exam-items-outputs.json | python3 -m json.tool || cat /tmp/exam-items-outputs.json
+python3 -m json.tool /tmp/exam-items-outputs.json || cat /tmp/exam-items-outputs.json
 
 if [[ "$NO_SMOKE_TEST" == "--no-smoke-test" ]]; then
   echo ""
