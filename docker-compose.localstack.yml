@@ -1,0 +1,28 @@
+# docker-compose.localstack.yml
+# Runs LocalStack for local AWS service emulation.
+# Start with: docker compose -f docker-compose.localstack.yml up -d
+# Stop with:  docker compose -f docker-compose.localstack.yml down
+
+services:
+  localstack:
+    image: localstack/localstack:3
+    ports:
+      - "4566:4566"
+    environment:
+      # Services needed for CDK deployment
+      - SERVICES=lambda,apigateway,dynamodb,iam,cloudformation,s3,sts
+      # Disable unnecessary features for local dev
+      - DISABLE_EVENTS=1
+      - EAGER_SERVICE_LOADING=1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - localstack-data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  localstack-data:
