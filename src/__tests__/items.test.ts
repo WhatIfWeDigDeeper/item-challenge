@@ -141,3 +141,61 @@ describe('updateItemHandler', () => {
     expect(body.error).toBe('Validation failed');
   });
 });
+
+describe('listItemsHandler', () => {
+  it('returns 200 with empty list when no items exist', async () => {
+    const result = await listItemsHandler(makeEvent());
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(200);
+    expect(body.items).toEqual([]);
+    expect(body.total).toBe(0);
+    expect(body.limit).toBe(10);
+    expect(body.offset).toBe(0);
+  });
+
+  it('returns all items with total count', async () => {
+    await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    await createItemHandler(makeEvent({ httpMethod: 'POST', body: { ...validItem, subject: 'AP Chemistry' } }));
+
+    const result = await listItemsHandler(makeEvent());
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(200);
+    expect(body.items).toHaveLength(2);
+    expect(body.total).toBe(2);
+  });
+
+  it('filters by subject', async () => {
+    await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    await createItemHandler(makeEvent({ httpMethod: 'POST', body: { ...validItem, subject: 'AP Chemistry' } }));
+
+    const result = await listItemsHandler(makeEvent({ queryStringParameters: { subject: 'AP Biology' } }));
+    const body = JSON.parse(result.body);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].subject).toBe('AP Biology');
+  });
+
+  it('filters by status', async () => {
+    await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    await createItemHandler(makeEvent({
+      httpMethod: 'POST',
+      body: { ...validItem, metadata: { ...validItem.metadata, status: 'approved' } },
+    }));
+
+    const result = await listItemsHandler(makeEvent({ queryStringParameters: { status: 'approved' } }));
+    const body = JSON.parse(result.body);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].metadata.status).toBe('approved');
+  });
+
+  it('paginates with limit and offset', async () => {
+    for (let i = 0; i < 3; i++) {
+      await createItemHandler(makeEvent({ httpMethod: 'POST', body: { ...validItem, subject: `Subject ${i}` } }));
+    }
+
+    const result = await listItemsHandler(makeEvent({ queryStringParameters: { limit: '2', offset: '1' } }));
+    const body = JSON.parse(result.body);
+    expect(body.items).toHaveLength(2);
+    expect(body.limit).toBe(2);
+    expect(body.offset).toBe(1);
+  });
+});
