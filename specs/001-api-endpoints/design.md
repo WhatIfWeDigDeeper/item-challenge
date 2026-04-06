@@ -70,7 +70,7 @@ export async function createItemHandler(event: APIGatewayProxyEvent): Promise<AP
 
 `@types/aws-lambda` is added as a devDependency (types only, no runtime cost).
 
-**Storage singleton:** Each handler file calls `createStorage()` at module load time and holds the result in a module-level constant. Because `createStorage()` is called once per module, and Node caches modules, all handlers in a given process share the same storage instance. In Lambda, each function is a separate process, so each gets its own instance — which is correct.
+**Storage singleton:** Handlers call `createStorage()` inside the handler function. `createStorage()` (in `src/storage/index.ts`) is memoized — it creates the storage instance on the first call and returns the same instance on every subsequent call. Because Node caches modules, all handlers in a given process share the same storage instance. In Lambda, each function is a separate process, so each gets its own instance — which is correct.
 
 `server.ts` constructs an `APIGatewayProxyEvent` from the Node `IncomingMessage` before calling each handler:
 

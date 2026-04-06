@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "test:api": "docker-compose -f tests/api/docker-compose.yml up -d && vitest run --config tests/api/vitest.config.ts; docker-compose -f tests/api/docker-compose.yml down"
+    "test:api": "docker-compose -f tests/api/docker-compose.yml up -d && vitest run --config tests/api/vitest.config.ts; status=$?; docker-compose -f tests/api/docker-compose.yml down; exit $status"
   },
   "keywords": [],
   "author": "",

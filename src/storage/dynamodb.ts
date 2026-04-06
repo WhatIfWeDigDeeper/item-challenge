@@ -17,11 +17,10 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
-  PutCommand,
   GetCommand,
-  UpdateCommand,
   ScanCommand,
-  QueryCommand
+  QueryCommand,
+  TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 import { ExamItem, CreateItemRequest, UpdateItemRequest, ListItemsQuery } from '../types/item.js';
@@ -56,13 +55,13 @@ export class DynamoDBStorage implements ItemStorage {
 
     // sk is required by the composite primary key; 'ITEM' identifies the base record.
     // VERSION#0001 is written alongside so the audit trail starts at creation.
-    await this.client.send(new PutCommand({
-      TableName: this.tableName,
-      Item: { ...item, sk: 'ITEM' },
-    }));
-    await this.client.send(new PutCommand({
-      TableName: this.tableName,
-      Item: { ...item, sk: 'VERSION#0001' },
+    // itemStatus is a denormalized top-level copy of metadata.status so the StatusIndex GSI can index it.
+    // TransactWriteItems makes both writes atomic — if either fails, neither is applied.
+    await this.client.send(new TransactWriteCommand({
+      TransactItems: [
+        { Put: { TableName: this.tableName, Item: { ...item, sk: 'ITEM', itemStatus: item.metadata.status } } },
+        { Put: { TableName: this.tableName, Item: { ...item, sk: 'VERSION#0001', itemStatus: item.metadata.status } } },
+      ],
     }));
 
     return item;
@@ -75,7 +74,7 @@ export class DynamoDBStorage implements ItemStorage {
     }));
 
     if (!result.Item) return null;
-    const { sk: _sk, ...item } = result.Item;
+    const { sk: _sk, itemStatus: _itemStatus, ...item } = result.Item;
     return item as ExamItem;
   }
 
@@ -96,13 +95,11 @@ export class DynamoDBStorage implements ItemStorage {
     };
 
     const versionSk = `VERSION#${String(updated.metadata.version).padStart(4, '0')}`;
-    await this.client.send(new PutCommand({
-      TableName: this.tableName,
-      Item: { ...updated, sk: 'ITEM' },
-    }));
-    await this.client.send(new PutCommand({
-      TableName: this.tableName,
-      Item: { ...updated, sk: versionSk },
+    await this.client.send(new TransactWriteCommand({
+      TransactItems: [
+        { Put: { TableName: this.tableName, Item: { ...updated, sk: 'ITEM', itemStatus: updated.metadata.status } } },
+        { Put: { TableName: this.tableName, Item: { ...updated, sk: versionSk, itemStatus: updated.metadata.status } } },
+      ],
     }));
 
     return updated;
@@ -135,7 +132,7 @@ export class DynamoDBStorage implements ItemStorage {
     }));
 
     // DynamoDB Limit caps items *scanned*, not returned — paginate client-side instead
-    const allItems = (result.Items || []).map(({ sk: _sk, ...item }) => item as ExamItem);
+    const allItems = (result.Items || []).map(({ sk: _sk, itemStatus: _itemStatus, ...item }) => item as ExamItem);
     const offset = query.offset || 0;
     const limit = query.limit || 10;
     return { items: allItems.slice(offset, offset + limit), total: allItems.length };
@@ -156,13 +153,11 @@ export class DynamoDBStorage implements ItemStorage {
     };
     const versionSk = `VERSION#${String(updated.metadata.version).padStart(4, '0')}`;
 
-    await this.client.send(new PutCommand({
-      TableName: this.tableName,
-      Item: { ...updated, sk: 'ITEM' },
-    }));
-    await this.client.send(new PutCommand({
-      TableName: this.tableName,
-      Item: { ...updated, sk: versionSk },
+    await this.client.send(new TransactWriteCommand({
+      TransactItems: [
+        { Put: { TableName: this.tableName, Item: { ...updated, sk: 'ITEM', itemStatus: updated.metadata.status } } },
+        { Put: { TableName: this.tableName, Item: { ...updated, sk: versionSk, itemStatus: updated.metadata.status } } },
+      ],
     }));
 
     return updated;
@@ -175,6 +170,6 @@ export class DynamoDBStorage implements ItemStorage {
       ExpressionAttributeValues: { ':id': id, ':prefix': 'VERSION#' },
     }));
 
-    return (result.Items || []).map(({ sk: _sk, ...item }) => item as ExamItem);
+    return (result.Items || []).map(({ sk: _sk, itemStatus: _itemStatus, ...item }) => item as ExamItem);
   }
 }

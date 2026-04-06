@@ -21,11 +21,11 @@ Zero-padded version numbers in the SK (`VERSION#0001`, `VERSION#0002`, …) ensu
 
 | Operation       | DynamoDB operation |
 |-----------------|-------------------|
-| Create item     | `PutItem` with `sk = ITEM` |
+| Create item     | `TransactWriteItems` → atomic write of `ITEM` + `VERSION#0001` records |
 | Get item        | `GetItem(id, ITEM)` |
-| Update item     | `PutItem` → overwrites `ITEM` record with incremented version |
+| Update item     | `TransactWriteItems` → atomic overwrite of `ITEM` + new `VERSION#NNNN` snapshot |
 | List items      | `Scan` with `FilterExpression sk = ITEM`; client-side offset/limit |
-| Create version  | `PutItem` → writes new `VERSION#NNNN` snapshot of current item |
+| Create version  | `TransactWriteItems` → atomic overwrite of `ITEM` + new `VERSION#NNNN` snapshot |
 | Get audit trail | `Query(id)` with SK `begins_with VERSION#` |
 
 #### GSIs
