@@ -26,7 +26,8 @@ src/
 │   ├── update-item.ts        # PUT /api/items/:id
 │   ├── list-items.ts         # GET /api/items
 │   ├── create-version.ts     # POST /api/items/:id/versions
-│   └── get-audit.ts          # GET /api/items/:id/audit
+│   ├── get-audit.ts          # GET /api/items/:id/audit
+│   └── example.ts            # DELETED — replaced by the handlers above
 ├── validators/
 │   └── items.ts              # All Zod schemas
 ├── storage/                  # Unchanged
@@ -55,6 +56,8 @@ specs/
 
 All handlers accept an `APIGatewayProxyEvent` and return `Promise<APIGatewayProxyResult>`. This is the real Lambda contract — no adaptation needed at deploy time.
 
+`src/handlers/example.ts` is deleted. The new handler files replace it entirely — do not extend or re-export from it.
+
 ```typescript
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
@@ -66,6 +69,8 @@ export async function createItemHandler(event: APIGatewayProxyEvent): Promise<AP
 ```
 
 `@types/aws-lambda` is added as a devDependency (types only, no runtime cost).
+
+**Storage singleton:** Each handler file calls `createStorage()` at module load time and holds the result in a module-level constant. Because `createStorage()` is called once per module, and Node caches modules, all handlers in a given process share the same storage instance. In Lambda, each function is a separate process, so each gets its own instance — which is correct.
 
 `server.ts` constructs an `APIGatewayProxyEvent` from the Node `IncomingMessage` before calling each handler:
 
@@ -139,8 +144,8 @@ describe('createItemHandler')   → 201 created, 400 invalid body, 400 missing f
 describe('getItemHandler')      → 200 found, 404 not found
 describe('updateItemHandler')   → 200 updated, 404 not found, 400 invalid body
 describe('listItemsHandler')    → 200 with array, filter by subject, filter by status, pagination
-describe('createVersionHandler')→ 201 new version, 404 not found, version number incremented
-describe('getAuditHandler')     → 200 with history, 404 not found, all versions in order
+describe('createVersionHandler')→ 201 new version (no request body — snapshots current state), 404 not found, version number incremented
+describe('getAuditHandler')     → 200 with `{ itemId, versions: ExamItem[] }` shape, 404 not found, all versions in order
 ```
 
 ---
@@ -152,7 +157,7 @@ Runs `amazon/dynamodb-local` on port 8000. Tests expect it running before the su
 
 ### npm script
 ```json
-"test:api": "docker-compose -f tests/api/docker-compose.yml up -d && vitest run tests/api && docker-compose -f tests/api/docker-compose.yml down"
+"test:api": "docker-compose -f tests/api/docker-compose.yml up -d && vitest run tests/api; docker-compose -f tests/api/docker-compose.yml down"
 ```
 
 ### `setup.ts`
@@ -231,4 +236,4 @@ Zero-padded version numbers in the SK ensure lexicographic sort order matches ve
 - CDK / Terraform infrastructure (Phase 2: `specs/002-cdk`)
 - Authentication / authorization
 - Cursor-based pagination
-- DynamoDB storage implementation (MemoryStorage is sufficient for Phase 1; DynamoDB single-table design is documented for Phase 2)
+- DynamoDB storage implementation code (`dynamodb.ts` changes) — the single-table schema design IS in scope and documented in Section 8; only the actual `DynamoDBStorage` class implementation is deferred to Phase 2
