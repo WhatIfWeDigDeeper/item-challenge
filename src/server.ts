@@ -1,28 +1,45 @@
-/**
- * Local Development Server
- *
- * A simple HTTP server for testing your handlers locally.
- * Run with: pnpm dev
- */
-
 import { createServer, IncomingMessage, ServerResponse } from 'http';
-import { getItemHandler, createItemHandler } from './handlers/example.js';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { createItemHandler } from './handlers/create-item.js';
+import { getItemHandler } from './handlers/get-item.js';
+import { updateItemHandler } from './handlers/update-item.js';
+import { listItemsHandler } from './handlers/list-items.js';
+import { createVersionHandler } from './handlers/create-version.js';
+import { getAuditHandler } from './handlers/get-audit.js';
 
 const PORT = process.env.PORT || 3000;
 
+function buildEvent(
+  req: IncomingMessage,
+  body: string | null,
+  pathParameters: Record<string, string> | null,
+  queryStringParameters: Record<string, string> | null,
+): APIGatewayProxyEvent {
+  return {
+    httpMethod: req.method ?? 'GET',
+    path: req.url?.split('?')[0] ?? '/',
+    pathParameters,
+    queryStringParameters,
+    body,
+    headers: req.headers as Record<string, string>,
+    multiValueHeaders: {},
+    multiValueQueryStringParameters: null,
+    isBase64Encoded: false,
+    requestContext: {} as any,
+    resource: '',
+    stageVariables: null,
+  } as APIGatewayProxyEvent;
+}
+
 async function handleRequest(req: IncomingMessage, res: ServerResponse) {
-  const { method, url } = req;
+  const { method, url = '/' } = req;
 
-  // Parse request body
-  let body = '';
-  req.on('data', chunk => body += chunk);
+  let rawBody = '';
+  req.on('data', chunk => rawBody += chunk);
   await new Promise(resolve => req.on('end', resolve));
-
-  const parsedBody = body ? JSON.parse(body) : null;
 
   console.log(`${method} ${url}`);
 
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -34,25 +51,33 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   try {
+    const urlObj = new URL(`http://localhost${url}`);
+    const parts = urlObj.pathname.split('/').filter(Boolean);
+    // parts examples: ['api','items'], ['api','items','<id>'], ['api','items','<id>','versions']
+    const qs = Object.fromEntries(urlObj.searchParams.entries());
+    const queryStringParameters = Object.keys(qs).length ? qs : null;
+    const body = rawBody || null;
+
     let result;
 
-    // Example routes - implement your own routing logic
-    if (method === 'GET' && url === '/api/items/test') {
-      result = await getItemHandler('test');
-    } else if (method === 'POST' && url === '/api/items') {
-      result = await createItemHandler(parsedBody);
-    } else if (method === 'GET' && url?.startsWith('/api/items/')) {
-      const id = url.split('/').pop();
-      result = await getItemHandler(id!);
+    if (method === 'POST' && parts.length === 2 && parts[1] === 'items') {
+      result = await createItemHandler(buildEvent(req, body, null, null));
+    } else if (method === 'GET' && parts.length === 2 && parts[1] === 'items') {
+      result = await listItemsHandler(buildEvent(req, null, null, queryStringParameters));
+    } else if (method === 'GET' && parts.length === 3 && parts[1] === 'items') {
+      result = await getItemHandler(buildEvent(req, null, { id: parts[2] }, null));
+    } else if (method === 'PUT' && parts.length === 3 && parts[1] === 'items') {
+      result = await updateItemHandler(buildEvent(req, body, { id: parts[2] }, null));
+    } else if (method === 'POST' && parts.length === 4 && parts[1] === 'items' && parts[3] === 'versions') {
+      result = await createVersionHandler(buildEvent(req, null, { id: parts[2] }, null));
+    } else if (method === 'GET' && parts.length === 4 && parts[1] === 'items' && parts[3] === 'audit') {
+      result = await getAuditHandler(buildEvent(req, null, { id: parts[2] }, null));
     } else {
-      result = {
-        statusCode: 404,
-        body: { error: 'Route not found' },
-      };
+      result = { statusCode: 404, body: JSON.stringify({ error: 'Route not found' }) };
     }
 
     res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(result.body));
+    res.end(result.body);
   } catch (error) {
     console.error('Server error:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -60,12 +85,16 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 }
 
-const server = createServer(handleRequest);
+export const server = createServer(handleRequest);
 
 server.listen(PORT, () => {
   console.log(`\n🚀 Server running at http://localhost:${PORT}`);
-  console.log(`\nExample endpoints:`);
+  console.log('\nEndpoints:');
   console.log(`  POST   http://localhost:${PORT}/api/items`);
+  console.log(`  GET    http://localhost:${PORT}/api/items`);
   console.log(`  GET    http://localhost:${PORT}/api/items/:id`);
-  console.log(`\nPress Ctrl+C to stop\n`);
+  console.log(`  PUT    http://localhost:${PORT}/api/items/:id`);
+  console.log(`  POST   http://localhost:${PORT}/api/items/:id/versions`);
+  console.log(`  GET    http://localhost:${PORT}/api/items/:id/audit`);
+  console.log('\nPress Ctrl+C to stop\n');
 });
