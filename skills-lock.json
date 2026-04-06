@@ -16,6 +16,11 @@
       "sourceType": "github",
       "computedHash": "6d36e69adad781f106a2fb4b19ebc22bf0c211babdc0d1ae5822fa65abb48bd8"
     },
+    "peer-review": {
+      "source": "whatifwedigdeeper/agent-skills",
+      "sourceType": "github",
+      "computedHash": "5ed04cb70a13af4607dbaec8e9b6b7f0c6da3cf9daf37cb04d85ac543a2af87f"
+    },
     "ship-it": {
       "source": "whatifwedigdeeper/agent-skills",
       "sourceType": "github",
