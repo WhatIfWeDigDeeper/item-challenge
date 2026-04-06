@@ -230,3 +230,37 @@ describe('createVersionHandler', () => {
     expect(body.metadata.version).toBe(3);
   });
 });
+
+describe('getAuditHandler', () => {
+  it('returns 200 with { itemId, versions } shape', async () => {
+    const created = await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    const { id } = JSON.parse(created.body);
+
+    const result = await getAuditHandler(makeEvent({ pathParameters: { id } }));
+    const body = JSON.parse(result.body);
+    expect(result.statusCode).toBe(200);
+    expect(body.itemId).toBe(id);
+    expect(Array.isArray(body.versions)).toBe(true);
+    expect(body.versions).toHaveLength(1);
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const result = await getAuditHandler(makeEvent({ pathParameters: { id: 'does-not-exist' } }));
+    expect(result.statusCode).toBe(404);
+  });
+
+  it('returns all versions in creation order', async () => {
+    const created = await createItemHandler(makeEvent({ httpMethod: 'POST', body: validItem }));
+    const { id } = JSON.parse(created.body);
+
+    await createVersionHandler(makeEvent({ httpMethod: 'POST', pathParameters: { id } }));
+    await createVersionHandler(makeEvent({ httpMethod: 'POST', pathParameters: { id } }));
+
+    const result = await getAuditHandler(makeEvent({ pathParameters: { id } }));
+    const body = JSON.parse(result.body);
+    expect(body.versions).toHaveLength(3);
+    expect(body.versions[0].metadata.version).toBe(1);
+    expect(body.versions[1].metadata.version).toBe(2);
+    expect(body.versions[2].metadata.version).toBe(3);
+  });
+});
