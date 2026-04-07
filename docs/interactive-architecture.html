@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Item Challenge — Interactive Architecture</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <!-- No Babel needed — using React.createElement directly -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+    /* Animated glow for active nodes */
+    @keyframes pulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+    @keyframes packetMove { 0% { offset-distance: 0%; } 100% { offset-distance: 100%; } }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes ripple { 0% { r: 6; opacity: 0.8; } 100% { r: 20; opacity: 0; } }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes typeRow { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 40px; } }
+
+    .scenario-btn { transition: all 0.2s; cursor: pointer; border: 2px solid transparent; }
+    .scenario-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .scenario-btn.active { border-color: #60a5fa; box-shadow: 0 0 16px rgba(96,165,250,0.3); }
+    .scenario-btn.write { border-left: 4px solid #ef4444; }
+    .scenario-btn.read { border-left: 4px solid #3b82f6; }
+    .scenario-btn.error { border-left: 4px solid #f59e0b; }
+
+    .db-row { animation: typeRow 0.4s ease-out forwards; }
+    .db-row.highlight { background: rgba(96,165,250,0.15); }
+    .db-row.new { background: rgba(34,197,94,0.15); }
+
+    .step-indicator { display: flex; gap: 4px; align-items: center; }
+    .step-dot { width: 8px; height: 8px; border-radius: 50%; background: #334155; transition: all 0.3s; }
+    .step-dot.done { background: #22c55e; }
+    .step-dot.active { background: #60a5fa; animation: pulse 1s infinite; }
+
+    .log-entry { animation: slideIn 0.3s ease-out; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; padding: 4px 8px; border-left: 3px solid #334155; margin-bottom: 2px; }
+    .log-entry.route { border-color: #d6b656; }
+    .log-entry.validate { border-color: #a78bfa; }
+    .log-entry.validate-fail { border-color: #f59e0b; }
+    .log-entry.write { border-color: #ef4444; }
+    .log-entry.read { border-color: #3b82f6; }
+    .log-entry.success { border-color: #22c55e; }
+    .log-entry.error { border-color: #ef4444; color: #fca5a5; }
+
+    .response-panel { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+    .json-key { color: #93c5fd; }
+    .json-string { color: #86efac; }
+    .json-number { color: #fcd34d; }
+    .json-bool { color: #c4b5fd; }
+
+    .cw-entry { animation: slideIn 0.25s ease-out; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; padding: 2px 6px; line-height: 1.6; white-space: pre; }
+    .cw-entry .cw-ts { color: #64748b; }
+    .cw-entry .cw-rid { color: #7c3aed; }
+    .cw-entry .cw-level-info { color: #22c55e; }
+    .cw-entry .cw-level-warn { color: #f59e0b; }
+    .cw-entry .cw-level-error { color: #ef4444; }
+    .cw-entry .cw-msg { color: #cbd5e1; }
+    .cw-entry.cw-start { color: #475569; font-style: italic; }
+    .cw-entry.cw-report { color: #64748b; border-top: 1px solid #1e293b; padding-top: 3px; margin-top: 1px; }
+    .cw-group-label { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; color: #f8cecc; background: #1a0505; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/javascript">
+const { useState, useEffect, useRef, useCallback, useMemo, createElement: h } = React;
+
+// ─── Node Layout ───
+const NODES = {
+  client:     { x: 60,  y: 260, w: 80,  h: 60,  label: 'Client',         sub: 'curl / Browser',  color: '#1e3a5f', stroke: '#3b82f6', textColor: '#93c5fd' },
+  apigw:      { x: 210, y: 210, w: 130, h: 110, label: 'API Gateway',    sub: 'REST / CORS',     color: '#3d2e00', stroke: '#d6b656', textColor: '#fcd34d' },
+  fn_create:  { x: 440, y: 65,  w: 140, h: 44,  label: 'CreateItem',     sub: 'Zod + TransactWrite', color: '#2d1f3d', stroke: '#9673a6', textColor: '#c4b5fd', group: 'write' },
+  fn_update:  { x: 440, y: 130, w: 140, h: 44,  label: 'UpdateItem',     sub: 'Zod + TransactWrite', color: '#2d1f3d', stroke: '#9673a6', textColor: '#c4b5fd', group: 'write' },
+  fn_version: { x: 440, y: 195, w: 140, h: 44,  label: 'CreateVersion',  sub: 'TransactWrite',       color: '#2d1f3d', stroke: '#9673a6', textColor: '#c4b5fd', group: 'write' },
+  fn_get:     { x: 440, y: 290, w: 140, h: 44,  label: 'GetItem',        sub: 'GetItem(id, ITEM)',   color: '#2d1f3d', stroke: '#9673a6', textColor: '#c4b5fd', group: 'read' },
+  fn_list:    { x: 440, y: 355, w: 140, h: 44,  label: 'ListItems',      sub: 'GSI / Scan',          color: '#2d1f3d', stroke: '#9673a6', textColor: '#c4b5fd', group: 'read' },
+  fn_audit:   { x: 440, y: 420, w: 140, h: 44,  label: 'GetAudit',       sub: 'begins_with VERSION#',color: '#2d1f3d', stroke: '#9673a6', textColor: '#c4b5fd', group: 'read' },
+  dynamo:     { x: 700, y: 220, w: 130, h: 80,  label: 'DynamoDB',       sub: 'ExamItems (single-table)', color: '#1a2e1a', stroke: '#82b366', textColor: '#86efac' },
+};
+
+// Fork junction points
+const JUNCTIONS = {
+  write_in:   { x: 400, y: 152 },
+  write_out:  { x: 650, y: 152 },
+  read_in:    { x: 400, y: 378 },
+  read_out:   { x: 650, y: 378 },
+};
+
+// ─── Scenarios ───
+const SCENARIOS = {
+  createItem: {
+    name: 'POST /api/items',
+    method: 'POST',
+    path: '/api/items',
+    type: 'write',
+    description: 'Create a new exam item with Zod validation and atomic TransactWrite',
+    requestBody: { subject: 'ap-calculus', itemType: 'multiple-choice', difficulty: 3, content: { question: 'What is the derivative of x\u00B3?', options: ['x\u00B2','2x','3x\u00B2','3x'], correctAnswer: '3x\u00B2', explanation: 'Power rule: d/dx(x\u207F) = nx\u207F\u207B\u00B9' }, metadata: { author: 'greg.murray', tags: ['calculus','derivatives'] }, securityLevel: 'standard' },
+    steps: [
+      { node: 'client',    action: 'send',     label: 'POST /api/items',           logType: 'route' },
+      { node: 'apigw',     action: 'route',    label: 'Route → CreateItem Lambda', logType: 'route' },
+      { node: 'fn_create', action: 'validate', label: 'Zod schema validation ✓',   logType: 'validate' },
+      { node: 'fn_create', action: 'process',  label: 'Build ITEM + VERSION#0001', logType: 'write' },
+      { node: 'dynamo',    action: 'write',    label: 'TransactWriteItems (atomic)',logType: 'write' },
+      { node: 'dynamo',    action: 'confirm',  label: 'ITEM + VERSION#0001 stored',logType: 'success' },
+      { node: 'client',    action: 'response', label: '201 Created',               logType: 'success' },
+    ],
+    dbRecords: (id) => [
+      { pk: id, sk: 'ITEM', subject: 'ap-calculus', status: 'draft', ver: 1 },
+      { pk: id, sk: 'VERSION#0001', subject: 'ap-calculus', status: 'draft', ver: 1 },
+    ],
+    response: (id) => ({ statusCode: 201, body: { id, subject: 'ap-calculus', itemType: 'multiple-choice', difficulty: 3, metadata: { version: 1, status: 'draft' } } }),
+  },
+  createItemInvalid: {
+    name: 'POST /api/items (invalid)',
+    method: 'POST',
+    path: '/api/items',
+    type: 'error',
+    description: 'Zod rejects request — missing required fields, returns 400',
+    requestBody: { subject: 'ap-calc', difficulty: 10, content: {} },
+    steps: [
+      { node: 'client',    action: 'send',          label: 'POST /api/items (bad body)', logType: 'route' },
+      { node: 'apigw',     action: 'route',         label: 'Route → CreateItem Lambda',  logType: 'route' },
+      { node: 'fn_create', action: 'validate-fail', label: 'Zod validation ✗ REJECTED',  logType: 'validate-fail' },
+      { node: 'client',    action: 'error',         label: '400 Bad Request',             logType: 'error' },
+    ],
+    dbRecords: () => [],
+    response: () => ({ statusCode: 400, body: { error: 'Validation failed', details: [ 'difficulty: must be between 1 and 5', 'content.question: required', 'content.correctAnswer: required', 'itemType: required' ] } }),
+  },
+  getItem: {
+    name: 'GET /api/items/:id',
+    method: 'GET',
+    path: '/api/items/:id',
+    type: 'read',
+    description: 'Retrieve current item by composite key (id, SK=ITEM)',
+    requestBody: null,
+    steps: [
+      { node: 'client',  action: 'send',     label: 'GET /api/items/abc-123',    logType: 'route' },
+      { node: 'apigw',   action: 'route',    label: 'Route → GetItem Lambda',    logType: 'route' },
+      { node: 'fn_get',  action: 'process',  label: 'GetItem(PK=id, SK=ITEM)',   logType: 'read' },
+      { node: 'dynamo',  action: 'read',     label: 'GetItem — single row fetch',logType: 'read' },
+      { node: 'fn_get',  action: 'respond',  label: 'Return item (strip SK)',    logType: 'success' },
+      { node: 'client',  action: 'response', label: '200 OK',                    logType: 'success' },
+    ],
+    dbRecords: () => [],
+    response: () => ({ statusCode: 200, body: { id: 'abc-123', subject: 'ap-calculus', metadata: { version: 1, status: 'draft' } } }),
+    highlightRows: (records) => records.filter(r => r.sk === 'ITEM').map(r => r.pk + r.sk),
+  },
+  updateItem: {
+    name: 'PUT /api/items/:id',
+    method: 'PUT',
+    path: '/api/items/:id',
+    type: 'write',
+    description: 'Update item — validates, increments version, atomic write of ITEM + new VERSION#',
+    requestBody: { difficulty: 4, metadata: { tags: ['calculus','updated'] } },
+    steps: [
+      { node: 'client',    action: 'send',     label: 'PUT /api/items/abc-123',       logType: 'route' },
+      { node: 'apigw',     action: 'route',    label: 'Route → UpdateItem Lambda',    logType: 'route' },
+      { node: 'fn_update', action: 'validate', label: 'Zod schema validation ✓',      logType: 'validate' },
+      { node: 'fn_update', action: 'process',  label: 'Increment version → 2',        logType: 'write' },
+      { node: 'dynamo',    action: 'write',    label: 'TransactWrite: ITEM + VERSION#0002', logType: 'write' },
+      { node: 'dynamo',    action: 'confirm',  label: 'Updated ITEM + VERSION#0002 stored', logType: 'success' },
+      { node: 'client',    action: 'response', label: '200 OK',                       logType: 'success' },
+    ],
+    dbRecords: (id) => [
+      { pk: id || 'abc-123', sk: 'VERSION#0002', subject: 'ap-calculus', status: 'draft', ver: 2 },
+    ],
+    response: () => ({ statusCode: 200, body: { id: 'abc-123', difficulty: 4, metadata: { version: 2, status: 'draft' } } }),
+  },
+  listItems: {
+    name: 'GET /api/items',
+    method: 'GET',
+    path: '/api/items?subject=ap-calculus',
+    type: 'read',
+    description: 'List items with optional filtering via GSI (SubjectIndex, StatusIndex)',
+    requestBody: null,
+    steps: [
+      { node: 'client',  action: 'send',    label: 'GET /api/items?subject=ap-calculus', logType: 'route' },
+      { node: 'apigw',   action: 'route',   label: 'Route → ListItems Lambda',           logType: 'route' },
+      { node: 'fn_list', action: 'process', label: 'Query SubjectIndex GSI',              logType: 'read' },
+      { node: 'dynamo',  action: 'read',    label: 'GSI query (ProjectionType: ALL)',     logType: 'read' },
+      { node: 'fn_list', action: 'respond', label: 'Filter SK=ITEM, paginate',            logType: 'success' },
+      { node: 'client',  action: 'response',label: '200 OK — items[] + total',            logType: 'success' },
+    ],
+    dbRecords: () => [],
+    response: () => ({ statusCode: 200, body: { items: ['...'], total: 1, offset: 0, limit: 20 } }),
+  },
+  createVersion: {
+    name: 'POST /api/items/:id/versions',
+    method: 'POST',
+    path: '/api/items/:id/versions',
+    type: 'write',
+    description: 'Snapshot current item state as a new version record',
+    requestBody: null,
+    steps: [
+      { node: 'client',     action: 'send',    label: 'POST /api/items/abc-123/versions', logType: 'route' },
+      { node: 'apigw',      action: 'route',   label: 'Route → CreateVersion Lambda',     logType: 'route' },
+      { node: 'fn_version', action: 'process', label: 'Read current → increment → snap',  logType: 'write' },
+      { node: 'dynamo',     action: 'write',   label: 'TransactWrite: ITEM + VERSION#0003',logType: 'write' },
+      { node: 'dynamo',     action: 'confirm', label: 'VERSION#0003 snapshot stored',      logType: 'success' },
+      { node: 'client',     action: 'response',label: '201 Created',                       logType: 'success' },
+    ],
+    dbRecords: (id) => [
+      { pk: id || 'abc-123', sk: 'VERSION#0003', subject: 'ap-calculus', status: 'draft', ver: 3 },
+    ],
+    response: () => ({ statusCode: 201, body: { id: 'abc-123', metadata: { version: 3, status: 'draft' } } }),
+  },
+  getAudit: {
+    name: 'GET /api/items/:id/audit',
+    method: 'GET',
+    path: '/api/items/:id/audit',
+    type: 'read',
+    description: 'Retrieve full version history — query all VERSION# sort keys',
+    requestBody: null,
+    steps: [
+      { node: 'client',   action: 'send',    label: 'GET /api/items/abc-123/audit',      logType: 'route' },
+      { node: 'apigw',    action: 'route',   label: 'Route → GetAudit Lambda',            logType: 'route' },
+      { node: 'fn_audit', action: 'process', label: 'Query PK=id, SK begins_with VERSION#', logType: 'read' },
+      { node: 'dynamo',   action: 'read',    label: 'Return all VERSION# records (sorted)',  logType: 'read' },
+      { node: 'fn_audit', action: 'respond', label: 'Build audit trail response',            logType: 'success' },
+      { node: 'client',   action: 'response',label: '200 OK — versions[]',                   logType: 'success' },
+    ],
+    dbRecords: () => [],
+    response: () => ({ statusCode: 200, body: { itemId: 'abc-123', versions: [ { version: 1, status: 'draft', modified: '...' }, { version: 2, status: 'draft', modified: '...' } ] } }),
+    highlightRows: (records) => records.filter(r => r.sk.startsWith('VERSION#')).map(r => r.pk + r.sk),
+  },
+};
+
+// ─── Helpers ───
+function shortId() { return Math.random().toString(36).substring(2, 8); }
+
+function cx(node) { return node.x + node.w / 2; }
+function cy(node) { return node.y + node.h / 2; }
+
+function getPathForStep(step, scenario) {
+  const s = NODES[step.node];
+  if (!s) return null;
+  return { x: cx(s), y: cy(s) };
+}
+
+// Pretty-print JSON with syntax highlighting
+function JsonView({ data, indent = 0 }) {
+  if (data === null || data === undefined) return React.createElement('span', { className: 'json-bool' }, 'null');
+  if (typeof data === 'boolean') return React.createElement('span', { className: 'json-bool' }, String(data));
+  if (typeof data === 'number') return React.createElement('span', { className: 'json-number' }, String(data));
+  if (typeof data === 'string') return React.createElement('span', { className: 'json-string' }, `"${data}"`);
+  if (Array.isArray(data)) {
+    if (data.length === 0) return React.createElement('span', null, '[]');
+    if (data.length === 1 && typeof data[0] === 'string') return React.createElement('span', null, '["', React.createElement('span', { className: 'json-string' }, data[0]), '"]');
+    return React.createElement('span', null,
+      '[',
+      React.createElement('br'),
+      ...data.flatMap((item, i) => [
+        React.createElement('span', { key: i }, '\u00A0'.repeat((indent + 1) * 2), React.createElement(JsonView, { data: item, indent: indent + 1 }), i < data.length - 1 ? ',' : ''),
+        React.createElement('br', { key: 'br' + i }),
+      ]),
+      '\u00A0'.repeat(indent * 2), ']'
+    );
+  }
+  const entries = Object.entries(data);
+  return React.createElement('span', null,
+    '{',
+    React.createElement('br'),
+    ...entries.flatMap(([key, val], i) => [
+      React.createElement('span', { key }, '\u00A0'.repeat((indent + 1) * 2), React.createElement('span', { className: 'json-key' }, `"${key}"`), ': ', React.createElement(JsonView, { data: val, indent: indent + 1 }), i < entries.length - 1 ? ',' : ''),
+      React.createElement('br', { key: 'br' + key }),
+    ]),
+    '\u00A0'.repeat(indent * 2), '}'
+  );
+}
+
+// ─── SVG Architecture Diagram ───
+function ArchitectureDiagram({ activeNode, activeStep, scenario, packetPos }) {
+  const writeFns = ['fn_create', 'fn_update', 'fn_version'];
+  const readFns = ['fn_get', 'fn_list', 'fn_audit'];
+
+  function nodeRect(id, node) {
+    const isActive = activeNode === id;
+    const isLambda = id.startsWith('fn_');
+    const isDynamo = id === 'dynamo';
+    const opacity = isActive ? 1 : 0.7;
+    const glowFilter = isActive ? 'url(#glow)' : '';
+    const strokeW = isActive ? 2.5 : 1.5;
+
+    return React.createElement('g', { key: id, opacity },
+      React.createElement('rect', {
+        x: node.x, y: node.y, width: node.w, height: node.h,
+        rx: isDynamo ? 6 : 8, ry: isDynamo ? 6 : 8,
+        fill: node.color, stroke: node.stroke, strokeWidth: strokeW,
+        filter: glowFilter,
+      }),
+      React.createElement('text', {
+        x: cx(node), y: cy(node) - (node.sub ? 6 : 0),
+        textAnchor: 'middle', fill: node.textColor, fontSize: isLambda ? 11 : 13, fontWeight: 600,
+      }, node.label),
+      node.sub && React.createElement('text', {
+        x: cx(node), y: cy(node) + 10,
+        textAnchor: 'middle', fill: node.textColor, fontSize: 8, opacity: 0.7,
+      }, node.sub),
+    );
+  }
+
+  // Build edge paths
+  function forkEdges() {
+    const edges = [];
+    const writeColor = '#ef4444';
+    const readColor = '#3b82f6';
+    const ji = JUNCTIONS;
+
+    // API GW → write junction
+    edges.push(React.createElement('path', {
+      key: 'apigw-wj', d: `M${NODES.apigw.x + NODES.apigw.w},${NODES.apigw.y + 30} L${ji.write_in.x},${ji.write_in.y}`,
+      stroke: writeColor, strokeWidth: 2, fill: 'none', opacity: 0.6, strokeDasharray: activeNode && writeFns.includes(activeNode) ? 'none' : '6 3',
+    }));
+    // Write junction → each write fn
+    writeFns.forEach((fnId) => {
+      const fn = NODES[fnId];
+      edges.push(React.createElement('path', {
+        key: `wj-${fnId}`, d: `M${ji.write_in.x},${ji.write_in.y} L${fn.x},${cy(fn)}`,
+        stroke: writeColor, strokeWidth: 2, fill: 'none', opacity: activeNode === fnId ? 0.9 : 0.5,
+      }));
+    });
+    // Each write fn → write out junction
+    writeFns.forEach((fnId) => {
+      const fn = NODES[fnId];
+      edges.push(React.createElement('path', {
+        key: `${fnId}-wjo`, d: `M${fn.x + fn.w},${cy(fn)} L${ji.write_out.x},${ji.write_out.y}`,
+        stroke: writeColor, strokeWidth: 2, fill: 'none', opacity: activeNode === fnId ? 0.9 : 0.5,
+      }));
+    });
+    // Write out junction → DynamoDB
+    edges.push(React.createElement('path', {
+      key: 'wjo-dynamo', d: `M${ji.write_out.x},${ji.write_out.y} L${NODES.dynamo.x},${NODES.dynamo.y + 20}`,
+      stroke: writeColor, strokeWidth: 2, fill: 'none', opacity: 0.6,
+    }));
+
+    // API GW → read junction
+    edges.push(React.createElement('path', {
+      key: 'apigw-rj', d: `M${NODES.apigw.x + NODES.apigw.w},${NODES.apigw.y + NODES.apigw.h - 20} L${ji.read_in.x},${ji.read_in.y}`,
+      stroke: readColor, strokeWidth: 2, fill: 'none', opacity: 0.6, strokeDasharray: activeNode && readFns.includes(activeNode) ? 'none' : '6 3',
+    }));
+    // Read junction → each read fn
+    readFns.forEach((fnId) => {
+      const fn = NODES[fnId];
+      edges.push(React.createElement('path', {
+        key: `rj-${fnId}`, d: `M${ji.read_in.x},${ji.read_in.y} L${fn.x},${cy(fn)}`,
+        stroke: readColor, strokeWidth: 2, fill: 'none', opacity: activeNode === fnId ? 0.9 : 0.5,
+      }));
+    });
+    // Each read fn → read out junction
+    readFns.forEach((fnId) => {
+      const fn = NODES[fnId];
+      edges.push(React.createElement('path', {
+        key: `${fnId}-rjo`, d: `M${fn.x + fn.w},${cy(fn)} L${ji.read_out.x},${ji.read_out.y}`,
+        stroke: readColor, strokeWidth: 2, fill: 'none', opacity: activeNode === fnId ? 0.9 : 0.5,
+      }));
+    });
+    // Read out junction → DynamoDB
+    edges.push(React.createElement('path', {
+      key: 'rjo-dynamo', d: `M${ji.read_out.x},${ji.read_out.y} L${NODES.dynamo.x},${NODES.dynamo.y + 60}`,
+      stroke: readColor, strokeWidth: 2, fill: 'none', opacity: 0.6,
+    }));
+
+    // Client → API GW
+    edges.push(React.createElement('path', {
+      key: 'client-apigw', d: `M${NODES.client.x + NODES.client.w},${cy(NODES.client)} L${NODES.apigw.x},${cy(NODES.apigw)}`,
+      stroke: '#6c8ebf', strokeWidth: 2, fill: 'none', opacity: 0.7,
+    }));
+
+    // Junction dots
+    [['write_in', writeColor], ['write_out', writeColor], ['read_in', readColor], ['read_out', readColor]].forEach(([jId, color]) => {
+      edges.push(React.createElement('circle', {
+        key: `j-${jId}`, cx: JUNCTIONS[jId].x, cy: JUNCTIONS[jId].y, r: 5, fill: color, opacity: 0.8,
+      }));
+    });
+
+    return edges;
+  }
+
+  // Animated packet
+  function packet() {
+    if (!packetPos) return null;
+    const color = scenario && scenario.type === 'write' ? '#ef4444' : scenario && scenario.type === 'read' ? '#3b82f6' : '#f59e0b';
+    return React.createElement('g', null,
+      React.createElement('circle', { cx: packetPos.x, cy: packetPos.y, r: 6, fill: color, opacity: 0.9 }),
+      React.createElement('circle', { cx: packetPos.x, cy: packetPos.y, r: 6, fill: 'none', stroke: color, strokeWidth: 2, opacity: 0.4 },
+        React.createElement('animate', { attributeName: 'r', from: '6', to: '18', dur: '1s', repeatCount: 'indefinite' }),
+        React.createElement('animate', { attributeName: 'opacity', from: '0.6', to: '0', dur: '1s', repeatCount: 'indefinite' }),
+      ),
+    );
+  }
+
+  // Labels
+  function labels() {
+    return React.createElement('g', null,
+      React.createElement('text', { x: 380, y: 40, textAnchor: 'middle', fill: '#ef4444', fontSize: 10, fontWeight: 600, opacity: 0.8 }, 'WRITE'),
+      React.createElement('text', { x: 380, y: 280, textAnchor: 'middle', fill: '#3b82f6', fontSize: 10, fontWeight: 600, opacity: 0.8 }, 'READ'),
+      React.createElement('text', { x: 155, y: cy(NODES.client) - 4, textAnchor: 'middle', fill: '#6c8ebf', fontSize: 9, opacity: 0.7 }, 'HTTPS'),
+      React.createElement('text', { x: 870, y: cy(NODES.dynamo) - 2, textAnchor: 'middle', fill: '#82b366', fontSize: 9, opacity: 0.7 }, 'GSIs: SubjectIndex'),
+      React.createElement('text', { x: 870, y: cy(NODES.dynamo) + 10, textAnchor: 'middle', fill: '#82b366', fontSize: 9, opacity: 0.7 }, 'StatusIndex'),
+      React.createElement('text', { x: 770, y: 130, textAnchor: 'middle', fill: '#ef4444', fontSize: 8, opacity: 0.6 }, 'TransactWriteItems'),
+      React.createElement('text', { x: 770, y: 410, textAnchor: 'middle', fill: '#3b82f6', fontSize: 8, opacity: 0.6 }, 'GetItem / Query / Scan'),
+    );
+  }
+
+  return React.createElement('svg', { viewBox: '0 0 950 490', style: { width: '100%', height: '100%', maxHeight: '490px' } },
+    React.createElement('defs', null,
+      React.createElement('filter', { id: 'glow' },
+        React.createElement('feGaussianBlur', { stdDeviation: '4', result: 'blur' }),
+        React.createElement('feMerge', null,
+          React.createElement('feMergeNode', { in: 'blur' }),
+          React.createElement('feMergeNode', { in: 'SourceGraphic' }),
+        ),
+      ),
+    ),
+    // Group labels
+    React.createElement('rect', { x: 430, y: 50, width: 160, height: 205, rx: 10, fill: 'none', stroke: '#ef4444', strokeWidth: 1, strokeDasharray: '4 2', opacity: 0.3 }),
+    React.createElement('rect', { x: 430, y: 275, width: 160, height: 205, rx: 10, fill: 'none', stroke: '#3b82f6', strokeWidth: 1, strokeDasharray: '4 2', opacity: 0.3 }),
+    ...forkEdges(),
+    ...Object.entries(NODES).map(([id, node]) => nodeRect(id, node)),
+    labels(),
+    packet(),
+  );
+}
+
+// ─── DynamoDB Table Visualization ───
+function DynamoTable({ records, highlightKeys }) {
+  const hl = new Set(highlightKeys || []);
+  return React.createElement('div', { style: { overflowX: 'auto' } },
+    React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: "'SF Mono', 'Fira Code', monospace" } },
+      React.createElement('thead', null,
+        React.createElement('tr', { style: { borderBottom: '1px solid #334155' } },
+          ['PK (id)', 'SK', 'subject', 'status', 'ver'].map(h =>
+            React.createElement('th', { key: h, style: { padding: '6px 8px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, fontSize: 10 } }, h)
+          ),
+        ),
+      ),
+      React.createElement('tbody', null,
+        records.length === 0
+          ? React.createElement('tr', null, React.createElement('td', { colSpan: 5, style: { padding: '16px', textAlign: 'center', color: '#475569', fontStyle: 'italic' } }, 'No records — run a write scenario'))
+          : records.map((r, i) => {
+              const key = r.pk + r.sk;
+              const isHighlight = hl.has(key);
+              const isNew = r._new;
+              return React.createElement('tr', {
+                key: key + i,
+                className: `db-row ${isHighlight ? 'highlight' : ''} ${isNew ? 'new' : ''}`,
+                style: { borderBottom: '1px solid #1e293b' },
+              },
+                React.createElement('td', { style: { padding: '5px 8px', color: '#93c5fd' } }, r.pk.substring(0, 8) + '...'),
+                React.createElement('td', { style: { padding: '5px 8px', color: r.sk === 'ITEM' ? '#fcd34d' : '#86efac' } }, r.sk),
+                React.createElement('td', { style: { padding: '5px 8px', color: '#e2e8f0' } }, r.subject),
+                React.createElement('td', { style: { padding: '5px 8px' } },
+                  React.createElement('span', { style: { padding: '1px 6px', borderRadius: 4, fontSize: 10, background: r.status === 'draft' ? '#1e293b' : '#064e3b', color: r.status === 'draft' ? '#94a3b8' : '#6ee7b7' } }, r.status),
+                ),
+                React.createElement('td', { style: { padding: '5px 8px', color: '#fcd34d' } }, r.ver),
+              );
+            }),
+      ),
+    ),
+  );
+}
+
+// ─── Main App ───
+function App() {
+  const [selectedScenario, setSelectedScenario] = useState(null);
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [isRunning, setIsRunning] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [dbRecords, setDbRecords] = useState([]);
+  const [response, setResponse] = useState(null);
+  const [packetPos, setPacketPos] = useState(null);
+  const [highlightKeys, setHighlightKeys] = useState([]);
+  const [cwLogs, setCwLogs] = useState([]);
+  const [speed, setSpeed] = useState(800);
+  const timerRef = useRef(null);
+  const logEndRef = useRef(null);
+  const cwLogEndRef = useRef(null);
+
+  const scenario = selectedScenario ? SCENARIOS[selectedScenario] : null;
+  const activeNode = scenario && currentStep >= 0 && currentStep < scenario.steps.length ? scenario.steps[currentStep].node : null;
+
+  useEffect(() => {
+    if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  useEffect(() => {
+    if (cwLogEndRef.current) cwLogEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [cwLogs]);
+
+  const runScenario = useCallback((scenarioKey) => {
+    if (isRunning) return;
+    const sc = SCENARIOS[scenarioKey];
+    setSelectedScenario(scenarioKey);
+    setCurrentStep(-1);
+    setIsRunning(true);
+    setLogs([]);
+    setResponse(null);
+    setHighlightKeys([]);
+    setCwLogs([]);
+
+    const itemId = shortId() + '-' + shortId();
+    const requestId = shortId() + '-' + shortId() + '-' + shortId();
+    const baseTime = Date.now();
+    let step = 0;
+    let lambdaStarted = null; // track which Lambda is currently active for START/END/REPORT
+    let lambdaDuration = 0;
+
+    function cwTs(offsetMs) {
+      return new Date(baseTime + offsetMs).toISOString().replace('T', ' ').substring(0, 23) + 'Z';
+    }
+
+    // Map a scenario step to CloudWatch log entries
+    function cwEntriesForStep(s, stepIdx) {
+      const entries = [];
+      const ts = cwTs(stepIdx * 120 + Math.random() * 50);
+      const fnLabel = s.node.startsWith('fn_') ? NODES[s.node].label : null;
+      const logGroup = fnLabel ? '/aws/lambda/ExamItems-' + fnLabel + 'Function' : null;
+
+      // Lambda START
+      if (fnLabel && lambdaStarted !== s.node) {
+        lambdaStarted = s.node;
+        lambdaDuration = 0;
+        entries.push({ type: 'start', logGroup, text: 'START RequestId: ' + requestId + '  Version: $LATEST' });
+      }
+
+      if (s.node === 'apigw') {
+        entries.push({ type: 'info', logGroup: '/aws/apigateway/ExamItemsApi', text: ts + '  ' + requestId + '  INFO  ' + s.label });
+      } else if (s.node === 'dynamo') {
+        const action = s.action === 'write' ? 'TransactWriteItems' : s.action === 'read' ? 'GetItem/Query' : 'OK';
+        const consumed = s.action === 'write' ? (Math.floor(Math.random() * 5) + 3) + ' WCU' : (Math.floor(Math.random() * 3) + 1) + ' RCU';
+        entries.push({ type: 'info', logGroup: logGroup || '/aws/lambda/unknown', text: ts + '  ' + requestId + '  INFO  DynamoDB ' + action + ' — consumed ' + consumed });
+      } else if (fnLabel) {
+        lambdaDuration += Math.floor(Math.random() * 30) + 10;
+        const level = s.action === 'validate-fail' || s.action === 'error' ? 'WARN' : 'INFO';
+        entries.push({ type: level === 'WARN' ? 'warn' : 'info', logGroup, text: ts + '  ' + requestId + '  ' + level + '  ' + s.label });
+      } else if (s.node === 'client') {
+        // No CloudWatch for client steps
+      }
+
+      return entries;
+    }
+
+    function advance() {
+      if (step >= sc.steps.length) {
+        // Emit Lambda END/REPORT if one was active
+        if (lambdaStarted) {
+          const fnLabel = NODES[lambdaStarted].label;
+          const logGroup = '/aws/lambda/ExamItems-' + fnLabel + 'Function';
+          lambdaDuration += Math.floor(Math.random() * 20) + 5;
+          const mem = Math.floor(Math.random() * 40) + 60;
+          setCwLogs(prev => [...prev,
+            { type: 'start', logGroup, text: 'END RequestId: ' + requestId },
+            { type: 'report', logGroup, text: 'REPORT RequestId: ' + requestId + '  Duration: ' + lambdaDuration + '.'+Math.floor(Math.random()*99)+' ms  Billed: ' + (Math.ceil(lambdaDuration/100)*100) + ' ms  Memory: ' + mem + '/256 MB' },
+          ]);
+        }
+        // Done — show response and add DB records
+        setResponse(sc.response(itemId));
+        const newRecords = sc.dbRecords(itemId).map(r => ({ ...r, _new: true }));
+        if (newRecords.length > 0) {
+          setDbRecords(prev => [...prev.map(r => ({ ...r, _new: false })), ...newRecords]);
+        }
+        if (sc.highlightRows) {
+          setDbRecords(prev => {
+            setHighlightKeys(sc.highlightRows(prev));
+            return prev;
+          });
+        }
+        setIsRunning(false);
+        setPacketPos(null);
+        return;
+      }
+
+      const s = sc.steps[step];
+      const node = NODES[s.node];
+      setCurrentStep(step);
+      setPacketPos({ x: cx(node), y: cy(node) });
+      setLogs(prev => [...prev, { text: s.label, type: s.logType, step: step + 1 }]);
+
+      // Generate CloudWatch entries for this step
+      const cwEntries = cwEntriesForStep(s, step);
+      if (cwEntries.length > 0) {
+        setCwLogs(prev => [...prev, ...cwEntries]);
+      }
+
+      step++;
+      timerRef.current = setTimeout(advance, speed);
+    }
+
+    timerRef.current = setTimeout(advance, 300);
+  }, [isRunning, speed]);
+
+  const reset = useCallback(() => {
+    clearTimeout(timerRef.current);
+    setSelectedScenario(null);
+    setCurrentStep(-1);
+    setIsRunning(false);
+    setLogs([]);
+    setCwLogs([]);
+    setResponse(null);
+    setPacketPos(null);
+    setHighlightKeys([]);
+  }, []);
+
+  const clearDb = useCallback(() => {
+    setDbRecords([]);
+    setHighlightKeys([]);
+  }, []);
+
+  // Layout
+  return React.createElement('div', { style: { maxWidth: 1280, margin: '0 auto', padding: '16px 20px' } },
+    // Header
+    React.createElement('div', { style: { marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } },
+      React.createElement('div', null,
+        React.createElement('h1', { style: { fontSize: 22, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 } }, 'Item Challenge — Interactive Architecture'),
+        React.createElement('p', { style: { fontSize: 13, color: '#64748b' } }, 'Exam Item Management API • College Board Take-Home • Click a scenario to trace the request flow'),
+      ),
+      React.createElement('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+        React.createElement('label', { style: { fontSize: 11, color: '#64748b' } }, 'Speed:'),
+        React.createElement('select', {
+          value: speed,
+          onChange: (e) => setSpeed(Number(e.target.value)),
+          style: { background: '#1e293b', border: '1px solid #334155', color: '#e2e8f0', padding: '4px 8px', borderRadius: 6, fontSize: 11 },
+        },
+          React.createElement('option', { value: 400 }, 'Fast'),
+          React.createElement('option', { value: 800 }, 'Normal'),
+          React.createElement('option', { value: 1400 }, 'Slow'),
+        ),
+      ),
+    ),
+
+    // Main grid
+    React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '200px 1fr', gap: 16 } },
+      // Left sidebar — scenario buttons
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+        React.createElement('div', { style: { fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 } }, 'Scenarios'),
+        ...Object.entries(SCENARIOS).map(([key, sc]) =>
+          React.createElement('button', {
+            key,
+            className: `scenario-btn ${sc.type} ${selectedScenario === key ? 'active' : ''}`,
+            onClick: () => runScenario(key),
+            disabled: isRunning,
+            style: {
+              background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px',
+              textAlign: 'left', color: '#e2e8f0', fontSize: 11, opacity: isRunning && selectedScenario !== key ? 0.5 : 1,
+            },
+          },
+            React.createElement('div', { style: { fontWeight: 600, marginBottom: 2 } },
+              React.createElement('span', { style: { color: sc.type === 'write' ? '#fca5a5' : sc.type === 'read' ? '#93c5fd' : '#fcd34d', marginRight: 6, fontSize: 10 } }, sc.method),
+              sc.name.replace(sc.method + ' ', ''),
+            ),
+            React.createElement('div', { style: { fontSize: 10, color: '#64748b', lineHeight: 1.3 } }, sc.description),
+          ),
+        ),
+        React.createElement('div', { style: { borderTop: '1px solid #1e293b', marginTop: 8, paddingTop: 8, display: 'flex', gap: 6 } },
+          React.createElement('button', {
+            onClick: reset,
+            style: { flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '6px', color: '#94a3b8', fontSize: 10, cursor: 'pointer' },
+          }, 'Reset'),
+          React.createElement('button', {
+            onClick: clearDb,
+            style: { flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '6px', color: '#94a3b8', fontSize: 10, cursor: 'pointer' },
+          }, 'Clear DB'),
+        ),
+      ),
+
+      // Right content
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+        // Architecture diagram
+        React.createElement('div', { style: { background: '#1e293b', borderRadius: 12, padding: '12px 16px', border: '1px solid #334155' } },
+          React.createElement(ArchitectureDiagram, { activeNode, activeStep: currentStep, scenario, packetPos }),
+        ),
+
+        // Bottom panels
+        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+          // Execution log
+          React.createElement('div', { style: { background: '#1e293b', borderRadius: 10, padding: '10px 12px', border: '1px solid #334155', maxHeight: 240, overflowY: 'auto' } },
+            React.createElement('div', { style: { fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+              'Execution Log',
+              scenario && React.createElement('div', { className: 'step-indicator' },
+                ...scenario.steps.map((_, i) =>
+                  React.createElement('div', { key: i, className: `step-dot ${i < currentStep ? 'done' : ''} ${i === currentStep ? 'active' : ''}` })
+                ),
+              ),
+            ),
+            logs.length === 0
+              ? React.createElement('div', { style: { color: '#475569', fontSize: 11, fontStyle: 'italic', padding: 8 } }, 'Select a scenario to begin...')
+              : logs.map((log, i) =>
+                  React.createElement('div', { key: i, className: `log-entry ${log.type}` },
+                    React.createElement('span', { style: { color: '#475569', marginRight: 6 } }, `[${log.step}]`),
+                    log.text,
+                  ),
+                ),
+            React.createElement('div', { ref: logEndRef }),
+          ),
+
+          // Response + DB
+          React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+            // Response
+            React.createElement('div', { style: { background: '#1e293b', borderRadius: 10, padding: '10px 12px', border: '1px solid #334155', maxHeight: 130, overflowY: 'auto' } },
+              React.createElement('div', { style: { fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6 } }, 'Response'),
+              response
+                ? React.createElement('pre', { className: 'response-panel', style: { whiteSpace: 'pre-wrap', lineHeight: 1.5 } },
+                    React.createElement(JsonView, { data: response }),
+                  )
+                : React.createElement('div', { style: { color: '#475569', fontSize: 11, fontStyle: 'italic' } }, 'Waiting for response...'),
+            ),
+          ),
+        ),
+
+        // CloudWatch Logs
+        React.createElement('div', { style: { background: '#0f172a', borderRadius: 10, padding: '10px 12px', border: '1px solid #334155', maxHeight: 200, overflowY: 'auto' } },
+          React.createElement('div', { style: { fontSize: 11, fontWeight: 600, color: '#f8cecc', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 } },
+            React.createElement('span', null, 'CloudWatch Logs'),
+            React.createElement('span', { style: { fontSize: 9, fontWeight: 400, color: '#64748b' } }, 'Log Groups: /aws/lambda/ExamItems-*Function | /aws/apigateway/ExamItemsApi'),
+            cwLogs.length > 0 && React.createElement('span', { style: { fontSize: 9, color: '#475569', marginLeft: 'auto' } }, cwLogs.length + ' entries'),
+          ),
+          cwLogs.length === 0
+            ? React.createElement('div', { style: { color: '#334155', fontSize: 11, fontStyle: 'italic', padding: '8px 0', fontFamily: "'SF Mono', monospace" } }, '// Waiting for Lambda invocation...')
+            : React.createElement('div', null,
+                ...cwLogs.map((entry, i) => {
+                  if (entry.type === 'start') {
+                    return React.createElement('div', { key: 'cw' + i, className: 'cw-entry cw-start' }, entry.text);
+                  }
+                  if (entry.type === 'report') {
+                    return React.createElement('div', { key: 'cw' + i, className: 'cw-entry cw-report' }, entry.text);
+                  }
+                  // Parse the entry text: "timestamp  requestId  LEVEL  message"
+                  var parts = entry.text.split('  ');
+                  if (parts.length >= 4) {
+                    var lvlClass = entry.type === 'warn' ? 'cw-level-warn' : entry.type === 'error' ? 'cw-level-error' : 'cw-level-info';
+                    return React.createElement('div', { key: 'cw' + i, className: 'cw-entry' },
+                      React.createElement('span', { className: 'cw-ts' }, parts[0] + '  '),
+                      React.createElement('span', { className: 'cw-rid' }, parts[1].substring(0, 12) + '  '),
+                      React.createElement('span', { className: lvlClass }, parts[2] + '  '),
+                      React.createElement('span', { className: 'cw-msg' }, parts.slice(3).join('  ')),
+                    );
+                  }
+                  return React.createElement('div', { key: 'cw' + i, className: 'cw-entry' },
+                    React.createElement('span', { className: 'cw-msg' }, entry.text),
+                  );
+                }),
+              ),
+          React.createElement('div', { ref: cwLogEndRef }),
+        ),
+
+        // DynamoDB State
+        React.createElement('div', { style: { background: '#1e293b', borderRadius: 10, padding: '10px 12px', border: '1px solid #334155' } },
+          React.createElement('div', { style: { fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 8, display: 'flex', justifyContent: 'space-between' } },
+            React.createElement('span', null, 'DynamoDB — ExamItems Table'),
+            React.createElement('span', { style: { fontWeight: 400, fontSize: 10, color: '#64748b' } }, `${dbRecords.length} records | PK: id (UUID) | SK: ITEM | VERSION#NNNN`),
+          ),
+          React.createElement(DynamoTable, { records: dbRecords, highlightKeys }),
+        ),
+      ),
+    ),
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
