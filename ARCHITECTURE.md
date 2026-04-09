@@ -128,7 +128,9 @@ pnpm build            # Compile TypeScript → dist/
 pnpm start            # Run compiled output
 pnpm test             # Run unit tests once
 pnpm test:watch       # Run unit tests in watch mode
-pnpm test:api         # Run Docker-based API integration tests (requires Docker)
+pnpm test:api              # Run Docker-based API integration tests (requires Docker)
+pnpm test:api:localstack        # Run API tests against an already-deployed LocalStack (reads ApiUrl from /tmp/exam-items-outputs.json)
+pnpm test:api:localstack:full   # Full lifecycle: start LocalStack, deploy, run API tests, stop LocalStack
 ```
 
 ### Infrastructure
@@ -265,3 +267,38 @@ curl -s http://localhost:3000/api/items/<id>/audit
 
 - Add support for calling AI services for draft quiz question generation, and generation of explanations and distractors for multiple-choice questions. This might involve RAG, but should be in a different service than this repo.
 
+---
+
+## Things I would do differently
+
+- Process: hard limit to implementation to 2.5 hours by creating more phases than just two.
+  - Phase I
+    - only implement 3 handlers add immediately add lambda files (so CDK can reference them)
+    - add unit tests, but only test Node with curls
+    - instruct superpowers plugin to use agent teams for implementation
+  - Phase II IaC
+    - plan it out in parallel once Claude Code is implementing phase I
+    - Model DynamoDB table for CDK but do not implement
+  - Phase III
+    - more in depth human review of draft PR
+    - set PR ready for review, run pr-comments
+    - while pr-comments is running work on future improvements section in the architecture document
+  - Phase IV (if ahead of time, run in parallel with phase III)
+    - implement DynamoDB
+    - add Docker and API tests
+  - Phase V
+    - Implement the rest of the API
+  - Phase VI
+    - add auth to cdk
+    - add localstack
+
+- Code
+  - Remove creating versions from update handler.
+  - Create #AUDIT item with new type for old and new values
+  - Rename handlers to add `exam` to the names to disambiguate from standard DynamoDB's `GetItem` and `PutItem`.
+    - `get-item.ts` -> `get-exam-item.ts`
+  - I didn't catch that one of the commits to types inlined the metadata type for no reason
+
+### Future
+
+- Consider compositeAttributes for more complex access patterns (e.g., `subject#status` GSI for combined filtering) if needed in the future.

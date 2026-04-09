@@ -79,6 +79,10 @@ cd infrastructure && npm install && npm test
 ```
 The root `vitest.config.ts` excludes `infrastructure/**` and `.pnpm-store/**` to prevent the root test runner from picking them up. Do not remove those exclusions.
 
+## Claude Code Session Logs
+
+`docs/claude-code-logs/` JSONL files store two `type: "user"` entries per slash command: the raw input (`<command-name>`/`<command-args>` tags) followed by the LLM-expanded prompt (`isMeta: true`). System injections (context summaries, `<task-notification>`, `<local-command-*>`) also appear as `type: "user"` — filter them when extracting real input. Each entry has a `"slug"` field as a human-readable session identifier.
+
 ## Environment
 
 ### GitHub CLI (gh)

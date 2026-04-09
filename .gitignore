@@ -37,3 +37,4 @@ coverage/
 
 # Claude
 .claude/settings.local.json
+docs/claude-code-logs/
