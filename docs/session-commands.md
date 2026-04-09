@@ -89,10 +89,16 @@ y
 ## Session 7 — `2c2ff9bc` · dreamy-tinkering-balloon · 13:07
 
 ```
-/superpowers:brainstorm I want to implement all the API endpoint listed in GETTING_STARTED.md under section 1. Any plan documentation should go in specs/001-api-endpoints. We should add tests under src/__tests__ in a single test file that has describe blocks for each handler. see example.tests.ts We need to add a .env.sample file with all the env vars mentioned in the code, and then copy it to a .env file. The tests should have a setup where the USE_DYNAMODB is false.
-we also want to add tests/api/ for true API testing. We would want to use Docker for those using the aws dynamo-db docker image.
+/superpowers:brainstorm I want to implement all the API endpoint listed in GETTING_STARTED.md under section 1.
+Any plan documentation should go in specs/001-api-endpoints. We should add tests under src/__tests__
+in a single test file that has describe blocks for each handler. see example.tests.ts
+We need to add a .env.sample file with all the env vars mentioned in the code, and then copy it to a .env file.
+The tests should have a setup where the USE_DYNAMODB is false.
+we also want to add tests/api/ for true API testing.
+We would want to use Docker for those using the aws dynamo-db docker image.
 any documentation should be written to the ARCHITECTURE.md file.
-this will be phase 1. We then will have a separate specs/002-cdk for building the infrastructure and using localstack for developing locally.
+this will be phase 1. We then will have a separate specs/002-cdk for building the infrastructure
+and using localstack for developing locally.
 ```
 
 ```
@@ -105,7 +111,8 @@ y
 ```
 
 ```
-the parameter and response should match the Lambda specs with event. In the Node server, it can create the parameter. Let's add a type(s) for it.
+the parameter and response should match the Lambda specs with event. In the Node server,
+it can create the parameter. Let's add a type(s) for it.
 ```
 
 ```
@@ -118,7 +125,10 @@ y
 ```
 
 ```
-What are the tradeoffs for having a second table ExamItemVersions, vs embedding that in the ExamItem table? If you look at the dynamodb.ts file it has the version in the metadata. Now it probably could be pulled out to the top level so a GSI can be created for id + version. Or is there another approach?
+What are the tradeoffs for having a second table ExamItemVersions, vs embedding that in
+the ExamItem table? If you look at the dynamodb.ts file it has the version in the metadata.
+Now it probably could be pulled out to the top level so a GSI can be created for id + version.
+Or is there another approach?
 ```
 
 ```
@@ -187,7 +197,8 @@ we need a .env.sample that contains all the env vars. It seems to have been remo
 
 ```
 should have continued pr-comments in auto mode and re-requested a review from copilot
-looks like pr comments did not re-request a review from copilot. please requrest a review from copilot and kick off pr-comments
+looks like pr comments did not re-request a review from copilot.
+please requrest a review from copilot and kick off pr-comments
 ```
 
 ```
@@ -208,7 +219,9 @@ commit and push
 
 ```
 I have change the api setup to use dynamodb.
-I made the changes to .env.sample manually. Commit and push and then continue with replying/resolving comments
+I made the changes to .env.sample manually.
+Commit and push and then continue with replying/resolving comments
+
 /exit
 ```
 
