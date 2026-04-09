@@ -302,3 +302,4 @@ curl -s http://localhost:3000/api/items/<id>/audit
 ### Future
 
 - Consider compositeAttributes for more complex access patterns (e.g., `subject#status` GSI for combined filtering) if needed in the future.
+- API Gateway supports dev documentation, including markdown, so no need for OpenAPI.
