@@ -271,6 +271,12 @@ curl -s http://localhost:3000/api/items/<id>/audit
 
 ## Things I would do differently
 
+- Code
+  - Remove creating versions from update handler.
+  - Create `AUDIT#<timestamp>` item with new type for old and new values
+  - Rename handlers to add `exam` to the names to disambiguate from standard DynamoDB's `GetItem` and `PutItem`.
+    - `get-item.ts` -> `get-exam-item.ts`
+
 - Process: hard limit to implementation to 2.5 hours by creating more phases than just two.
   - Phase I
     - only implement 3 handlers add immediately add lambda files (so CDK can reference them)
@@ -281,6 +287,7 @@ curl -s http://localhost:3000/api/items/<id>/audit
     - Model DynamoDB table for CDK but do not implement
   - Phase III
     - more in depth human review of draft PR
+      - for example, I didn't catch that one of the commits to types inlined the metadata type for no reason
     - set PR ready for review, run pr-comments
     - while pr-comments is running work on future improvements section in the architecture document
   - Phase IV (if ahead of time, run in parallel with phase III)
@@ -291,13 +298,6 @@ curl -s http://localhost:3000/api/items/<id>/audit
   - Phase VI
     - add auth to cdk
     - add localstack
-
-- Code
-  - Remove creating versions from update handler.
-  - Create #AUDIT item with new type for old and new values
-  - Rename handlers to add `exam` to the names to disambiguate from standard DynamoDB's `GetItem` and `PutItem`.
-    - `get-item.ts` -> `get-exam-item.ts`
-  - I didn't catch that one of the commits to types inlined the metadata type for no reason
 
 ### Future
 
